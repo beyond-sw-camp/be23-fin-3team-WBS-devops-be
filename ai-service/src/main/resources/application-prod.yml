@@ -1,0 +1,68 @@
+server:
+  port: ${AI_SERVER_PORT:0}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_DEFAULT_ZONE:http://eureka:8761/eureka/}
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
+
+spring:
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: ${AI_DB_URL}
+    username: ${AI_DB_USERNAME}
+    password: ${AI_DB_PASSWORD}
+
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: false
+
+  redis:
+    host: ${REDIS_HOST}
+    port: ${REDIS_PORT:6379}
+
+  ai:
+    retry:
+      max-attempts: ${SPRING_AI_RETRY_MAX_ATTEMPTS:1}
+    openai:
+      api-key: ${OPENAI_API_KEY}
+      chat:
+        options:
+          model: ${OPENAI_CHAT_MODEL:gpt-4o-mini}
+          temperature: ${OPENAI_CHAT_TEMPERATURE:0.1}
+          max-tokens: ${OPENAI_CHAT_MAX_TOKENS:220}
+      embedding:
+        options:
+          model: ${OPENAI_EMBED_MODEL:text-embedding-3-small}
+
+    vectorstore:
+      pgvector:
+        index-type: ${PGVECTOR_INDEX_TYPE:HNSW}
+        distance-type: ${PGVECTOR_DISTANCE_TYPE:COSINE_DISTANCE}
+        dimensions: ${PGVECTOR_DIMENSIONS:1536}
+        initialize-schema: ${PGVECTOR_INITIALIZE_SCHEMA:false}
+        table-name: ${PGVECTOR_TABLE_NAME:vector_store}
+
+wms:
+  readonly-datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    jdbc-url: ${WMS_READONLY_DB_URL}
+    username: ${WMS_READONLY_DB_USERNAME}
+    password: ${WMS_READONLY_DB_PASSWORD}
+
+logging:
+  level:
+    org.springframework.ai: ${LOGGING_LEVEL_SPRING_AI:WARN}
+    org.springframework.ai.retry.autoconfigure.SpringAiRetryAutoConfiguration: ERROR
+    org.springframework.ai.vectorstore.pgvector: ${LOGGING_LEVEL_PGVECTOR:INFO}
+    com.beyond.wbs: ${LOGGING_LEVEL_WBS:INFO}

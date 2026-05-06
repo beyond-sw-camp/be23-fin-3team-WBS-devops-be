@@ -1,0 +1,109 @@
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
+    <title th:text="${'기타입출고지시서 ' + data.sourceNo}">기타입출고지시서</title>
+    <style th:inline="text">
+        /*<![CDATA[*/
+        @page { size: A4; margin: 16mm 14mm 18mm 14mm; }
+        body { font-family: 'NanumGothic', sans-serif; font-size: 9pt; color: #1a1a1a; }
+        .doc-header { border-bottom: 1.4pt solid #1a1a1a; padding-bottom: 4mm; margin-bottom: 6mm; }
+        .doc-header h1 { font-size: 17pt; margin: 0 0 2mm 0; letter-spacing: 0.5mm; }
+        .doc-header .meta-row { font-size: 8.5pt; color: #444; }
+        .doc-header .meta-row .left { float: left; }
+        .doc-header .meta-row .right { float: right; }
+        .doc-header .meta-row:after { content: " "; display: block; clear: both; }
+        table.meta { width: 100%; border-collapse: collapse; margin-bottom: 5mm; }
+        table.meta th, table.meta td { border: 0.4pt solid #888; padding: 1.6mm 2mm; font-size: 9pt; vertical-align: top; }
+        table.meta th { background: #f1f1f1; text-align: left; width: 22mm; font-weight: bold; }
+        table.items { width: 100%; border-collapse: collapse; margin-bottom: 4mm; }
+        table.items th, table.items td { border: 0.4pt solid #555; padding: 1.4mm 1.8mm; font-size: 9pt; }
+        table.items th { background: #2a3a55; color: #ffffff; font-weight: bold; text-align: center; }
+        table.items td.num { text-align: right; }
+        table.items td.center { text-align: center; }
+        .summary-row { width: 100%; margin: 2mm 0 6mm 0; font-size: 9.5pt; }
+        .summary-row .left { float: left; }
+        .summary-row .right { float: right; font-weight: bold; }
+        .summary-row:after { content: " "; display: block; clear: both; }
+        .doc-footer { margin-top: 8mm; padding-top: 3mm; border-top: 0.4pt solid #888; font-size: 8pt; color: #555; }
+        .doc-footer .official-notice { text-align: center; font-weight: bold; color: #1a1a1a; margin-top: 3mm; }
+        /*]]>*/
+    </style>
+</head>
+<body>
+<div class="doc-header">
+    <h1>기 타 입 출 고 지 시 서</h1>
+    <div class="meta-row">
+        <span class="left" th:text="${data.clientName ?: '-'}"></span>
+        <span class="right">
+            <span th:text="${'문서번호: ' + data.sourceNo}"></span>
+            <span th:if="${context.version > 1}" th:text="${' / ' + context.version + '회차'}"></span>
+        </span>
+    </div>
+</div>
+
+<table class="meta">
+    <tr>
+        <th>방향</th>
+        <td th:text="${data.directionLabel}"></td>
+        <th>유형</th>
+        <td th:text="${data.ioTypeLabel}"></td>
+    </tr>
+    <tr>
+        <th>창고</th>
+        <td th:text="${data.warehouseName ?: '-'}"></td>
+        <th th:text="${data.partnerLabel}"></th>
+        <td th:text="${data.partnerName ?: '-'}"></td>
+    </tr>
+    <tr>
+        <th>상태</th>
+        <td th:text="${data.statusLabel ?: '-'}"></td>
+        <th>생성자</th>
+        <td th:text="${data.createdByName ?: '-'}"></td>
+    </tr>
+    <tr th:if="${data.note != null and !#strings.isEmpty(data.note)}">
+        <th>비고</th>
+        <td colspan="3" th:text="${data.note}"></td>
+    </tr>
+</table>
+
+<table class="items">
+    <thead>
+    <tr>
+        <th style="width: 8mm;">No</th>
+        <th style="width: 22mm;">SKU</th>
+        <th>상품명</th>
+        <th>위치</th>
+        <th style="width: 14mm;">수량</th>
+        <th style="width: 14mm;">처리</th>
+        <th style="width: 16mm;">로트</th>
+        <th style="width: 14mm;">상태</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr th:each="item, iter : ${data.items}">
+        <td class="center" th:text="${iter.count}"></td>
+        <td class="center" th:text="${item.sku}"></td>
+        <td th:text="${item.productName}"></td>
+        <td class="center" th:text="${item.locationName}"></td>
+        <td class="num" th:text="${#numbers.formatInteger(item.qty, 1, 'COMMA')}"></td>
+        <td class="num" th:text="${#numbers.formatInteger(item.processedQty, 1, 'COMMA')}"></td>
+        <td class="center" th:text="${item.lotNo ?: '-'}"></td>
+        <td class="center" th:text="${item.conditionLabel}"></td>
+    </tr>
+    </tbody>
+</table>
+
+<div class="summary-row">
+    <span class="left" th:text="${'총 ' + data.items.size() + '건'}"></span>
+    <span class="right" th:text="${'요청수량 합계 ' + #numbers.formatInteger(data.totalQty, 1, 'COMMA')}"></span>
+</div>
+
+<div class="doc-footer">
+    <div class="official-notice">공식 보존본은 본 PDF입니다.</div>
+    <div style="text-align: center; margin-top: 1mm;">
+        발행일시 <span th:text="${#temporals.format(context.issuedAt, 'yyyy-MM-dd HH:mm')}"></span>
+        · 문서ID <span th:text="${context.sourceId}"></span>
+    </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,80 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.4.8'
+    id 'io.spring.dependency-management' version '1.1.7'
+    id 'maven-publish'
+}
+
+group = 'com.beyond'
+version = '0.0.1-SNAPSHOT'
+
+// 라이브러리이므로 bootJar 비활성화, 일반 jar 활성화
+bootJar { enabled = false }
+jar {
+    enabled = true
+    archiveClassifier = ''  // plain 제거
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencyManagement {
+    imports {
+        mavenBom 'org.springframework.cloud:spring-cloud-dependencies:2024.0.0'
+    }
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+
+    implementation 'com.github.f4b6a3:uuid-creator:6.0.0'
+
+    implementation 'software.amazon.awssdk:s3:2.29.50'
+    implementation 'org.springframework.kafka:spring-kafka'
+    implementation 'co.elastic.clients:elasticsearch-java:9.3.1'
+    implementation 'org.elasticsearch.client:elasticsearch-rest-client:9.3.1'
+
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+}
+
+// publish 대상:
+//   - mavenLocal: 로컬 개발 사이클용 (./gradlew :publishToMavenLocal)
+//   - GitHub Packages: CI/공유용 (./gradlew :publish)
+//
+// 인증:
+//   로컬 개발자 — ~/.gradle/gradle.properties 에 gpr.user / gpr.token 저장
+//   CI(GitHub Actions) — GITHUB_ACTOR / GITHUB_TOKEN 환경변수 자동 주입
+//
+// repo URL 의 owner/repo 가 달라지면 본 블록 + 의존 모듈 5곳을 함께 갱신.
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+        }
+    }
+    repositories {
+        maven {
+            name = 'GitHubPackages'
+            url = uri('https://maven.pkg.github.com/beyond-sw-camp/be23-fin-3team-WBS-be')
+            credentials {
+                username = project.findProperty('gpr.user') ?: System.getenv('GITHUB_ACTOR')
+                password = project.findProperty('gpr.token') ?: System.getenv('GITHUB_TOKEN')
+            }
+        }
+    }
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}

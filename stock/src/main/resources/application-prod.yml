@@ -1,0 +1,109 @@
+server:
+  port: ${STOCK_SERVER_PORT:0}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_DEFAULT_ZONE:http://eureka:8761/eureka/}
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
+
+spring:
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: ${STOCK_DB_URL}
+    username: ${STOCK_DB_USERNAME}
+    password: ${STOCK_DB_PASSWORD}
+  jpa:
+    database: mysql
+    database-platform: org.hibernate.dialect.MySQLDialect
+    generate-ddl: false
+    hibernate:
+      ddl-auto: validate
+    show_sql: false
+    defer-datasource-initialization: false
+  sql:
+    init:
+      mode: never
+  redis:
+    host: ${REDIS_HOST}
+    port: ${REDIS_PORT:6379}
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+    consumer:
+      group-id: ${STOCK_KAFKA_GROUP_ID:stock-group}
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    streams:
+      application-id: ${STOCK_STREAMS_APPLICATION_ID:stock-streams}
+      state-dir: ${STOCK_KAFKA_STREAMS_STATE_DIR:/tmp/kafka-streams/stock}
+      properties:
+        replication.factor: ${KAFKA_REPLICATION_FACTOR:1}
+        commit.interval.ms: 1000
+        default.key.serde: org.apache.kafka.common.serialization.Serdes$StringSerde
+        default.value.serde: org.springframework.kafka.support.serializer.JsonSerde
+        spring.json.trusted.packages: "*"
+
+  elasticsearch:
+    uris: ${SPRING_ELASTICSEARCH_URIS}
+
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+        debug: ${MAIL_DEBUG:false}
+
+aws:
+  credentials:
+    access-key: ${AWS_ACCESS_KEY_ID}
+    secret-key: ${AWS_SECRET_ACCESS_KEY}
+  region: ${AWS_REGION:ap-northeast-2}
+  s3:
+    instruction-bucket: ${AWS_S3_INSTRUCTION_BUCKET}
+    instruction-presign-ttl-seconds: ${AWS_S3_INSTRUCTION_PRESIGN_TTL_SECONDS:300}
+    defect-evidence-bucket: ${AWS_S3_DEFECT_EVIDENCE_BUCKET:${AWS_S3_INSTRUCTION_BUCKET}}
+    defect-evidence-download-ttl-seconds: ${AWS_S3_DEFECT_EVIDENCE_DOWNLOAD_TTL_SECONDS:300}
+
+defect-evidence:
+  max-file-size-bytes: ${DEFECT_EVIDENCE_MAX_FILE_SIZE_BYTES:5242880}
+  max-per-source: ${DEFECT_EVIDENCE_MAX_PER_SOURCE:5}
+  allowed-mime-types: ${DEFECT_EVIDENCE_ALLOWED_MIME_TYPES:image/jpeg,image/png,image/webp,image/heic,image/heif}
+
+app:
+  mail:
+    inbound-request:
+      to: ${INBOUND_REQUEST_MAIL_TO:}
+      from: ${INBOUND_REQUEST_MAIL_FROM:${MAIL_USERNAME}}
+      from-name: ${INBOUND_REQUEST_MAIL_FROM_NAME:WMS 시스템}
+      subject-prefix: ${INBOUND_REQUEST_MAIL_SUBJECT_PREFIX:[기타출고] 입고 요청}
+
+spring.servlet.multipart:
+  max-file-size: ${MULTIPART_MAX_FILE_SIZE:6MB}
+  max-request-size: ${MULTIPART_MAX_REQUEST_SIZE:6MB}
+
+instruction-document:
+  kafka:
+    topic: ${INSTRUCTION_DOCUMENT_TOPIC:instruction.issued}
+    consumer-group: ${INSTRUCTION_DOCUMENT_CONSUMER_GROUP:instruction-doc-group}
+    dlq-topic: ${INSTRUCTION_DOCUMENT_DLQ_TOPIC:instruction.issued.dlq}
+  retry:
+    max-attempts: ${INSTRUCTION_DOCUMENT_RETRY_MAX_ATTEMPTS:3}
+    initial-interval-ms: ${INSTRUCTION_DOCUMENT_RETRY_INITIAL_INTERVAL_MS:500}
+    multiplier: ${INSTRUCTION_DOCUMENT_RETRY_MULTIPLIER:2.0}

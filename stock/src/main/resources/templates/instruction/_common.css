@@ -1,0 +1,126 @@
+/*
+ * 지시서 PDF 공통 스타일.
+ * Flying Saucer는 CSS 2.1 수준만 지원하므로 flex/grid 사용 금지.
+ * 모든 길이는 mm 단위 권장 (인쇄 결과 일관).
+ */
+
+@page {
+    size: A4;
+    margin: 16mm 14mm 18mm 14mm;
+}
+
+body {
+    font-family: 'NanumGothic', sans-serif;
+    font-size: 9pt;
+    color: #1a1a1a;
+    line-height: 1.4;
+    margin: 0;
+    padding: 0;
+}
+
+/* 헤더 */
+.doc-header {
+    width: 100%;
+    border-bottom: 1.4pt solid #1a1a1a;
+    padding-bottom: 4mm;
+    margin-bottom: 6mm;
+}
+.doc-header h1 {
+    font-size: 18pt;
+    font-weight: bold;
+    margin: 0 0 2mm 0;
+    letter-spacing: 1mm;
+}
+.doc-header .meta-row {
+    width: 100%;
+    font-size: 8.5pt;
+    color: #444;
+}
+.doc-header .meta-row .left  { float: left; }
+.doc-header .meta-row .right { float: right; }
+.doc-header .meta-row::after {
+    content: " ";
+    display: block;
+    clear: both;
+}
+
+/* 메타 표 (2x4) */
+table.meta {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 5mm;
+}
+table.meta th, table.meta td {
+    border: 0.4pt solid #888;
+    padding: 1.6mm 2mm;
+    font-size: 9pt;
+    vertical-align: top;
+}
+table.meta th {
+    background: #f1f1f1;
+    text-align: left;
+    width: 22mm;
+    font-weight: bold;
+}
+
+/* 품목 표 */
+table.items {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 4mm;
+}
+table.items th, table.items td {
+    border: 0.4pt solid #555;
+    padding: 1.4mm 1.8mm;
+    font-size: 9pt;
+}
+table.items th {
+    background: #2a3a55;
+    color: #ffffff;
+    font-weight: bold;
+    text-align: center;
+}
+table.items td.num    { text-align: right; }
+table.items td.center { text-align: center; }
+table.items tr.total td {
+    background: #fafafa;
+    font-weight: bold;
+}
+
+/* 푸터 */
+.doc-footer {
+    margin-top: 8mm;
+    padding-top: 3mm;
+    border-top: 0.4pt solid #888;
+    font-size: 8pt;
+    color: #555;
+}
+.doc-footer .signature-row {
+    width: 100%;
+    margin-bottom: 4mm;
+    font-size: 9pt;
+    color: #1a1a1a;
+}
+.doc-footer .signature-row .left  { float: left;  width: 49%; }
+.doc-footer .signature-row .right { float: right; width: 49%; text-align: right; }
+.doc-footer .signature-row::after {
+    content: " ";
+    display: block;
+    clear: both;
+}
+.doc-footer .official-notice {
+    text-align: center;
+    font-weight: bold;
+    color: #1a1a1a;
+    margin-top: 3mm;
+}
+
+.reissue-banner {
+    background: #fff4d6;
+    border: 0.6pt solid #c08a00;
+    color: #5a3d00;
+    padding: 2mm 3mm;
+    margin-bottom: 4mm;
+    font-size: 9pt;
+    font-weight: bold;
+}

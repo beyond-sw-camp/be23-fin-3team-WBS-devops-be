@@ -1,0 +1,53 @@
+server:
+  port: ${API_GATEWAY_SERVER_PORT:8080}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_DEFAULT_ZONE:http://eureka:8761/eureka/}
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
+
+spring:
+  cloud:
+    gateway:
+      httpclient:
+        connect-timeout: ${GATEWAY_CONNECT_TIMEOUT_MS:3000}
+        response-timeout: ${GATEWAY_RESPONSE_TIMEOUT:10s}
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins: ${GATEWAY_ALLOWED_ORIGINS}
+            allowedMethods: '*'
+            allowedHeaders: '*'
+            allowedCredentials: true
+      routes:
+        - id: account-service
+          predicates:
+            - Path=/account-service/**
+          filters:
+            - StripPrefix=1
+          uri: lb://account-service
+        - id: master-service
+          predicates:
+            - Path=/master-service/**
+          filters:
+            - StripPrefix=1
+          uri: lb://master-service
+        - id: stock-service
+          predicates:
+            - Path=/stock-service/**
+          filters:
+            - StripPrefix=1
+          uri: lb://stock-service
+        - id: search-service
+          predicates:
+            - Path=/search-service/**
+          filters:
+            - StripPrefix=1
+          uri: lb://search-service
+
+jwt:
+  secretKey: ${JWT_SECRET_KEY}
