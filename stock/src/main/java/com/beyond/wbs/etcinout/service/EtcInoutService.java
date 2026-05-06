@@ -37,6 +37,8 @@ import com.beyond.wbs.outbounds.repository.OutboundOrderRepository;
 import com.beyond.wbs.outbounds.service.OutboundService;
 import com.beyond.wbs.document.instruction.domain.InstructionDocumentType;
 import com.beyond.wbs.document.instruction.event.InstructionIssueRequested;
+import com.beyond.wbs.etcinout.kafka.EtcInoutEventPublisher;
+import com.beyond.wbs.kafka.event.EtcInoutStockEvent;
 import com.beyond.wbs.websocket.WebSocketPublisher;
 import com.beyond.wbs.websocket.WorkEventMessage;
 import jakarta.persistence.criteria.Predicate;
@@ -78,6 +80,7 @@ public class EtcInoutService {
     private final EtcInoutCancellationLinkRepository cancellationLinkRepository;
     private final AccountServiceClient accountServiceClient;
     private final EtcInoutMailService etcInoutMailService;
+    private final EtcInoutEventPublisher etcInoutEventPublisher;
 
     // ============================================================
     // Feign 조회 헬퍼 (실패 시 null — 이름 없어도 서비스는 동작)
@@ -107,6 +110,20 @@ public class EtcInoutService {
             log.warn("[Feign] supplier 조회 실패: {} - {}", supplierId, e.getMessage());
             return null;
         }
+    }
+
+    // 통계 이벤트 페이로드 빌드 헬퍼 — publish 4곳에서 공통 사용
+    private EtcInoutStockEvent buildEtcInoutEvent(EtcInoutOrder order, UUID userId,
+                                                  List<EtcInoutStockEvent.Item> items) {
+        return EtcInoutStockEvent.builder()
+                .clientId(order.getClientId())
+                .warehouseId(order.getWarehouseId())
+                .refId(order.getId())
+                .userId(userId)
+                .direction(order.getDirection() != null ? order.getDirection().name() : null)
+                .ioType(order.getIoType() != null ? order.getIoType().name() : null)
+                .items(items)
+                .build();
     }
 
     // WS 알림: 모듈 공통 형식 (admin 목록/상세 + 배정 작업자 모바일)
@@ -251,6 +268,9 @@ public class EtcInoutService {
 
         // WS: 운영자 생성 알림 → admin
         notifyEtcInout("CREATED", savedOrder, userId, false);
+
+        // 통계/대시보드 카운트용 — 생성 이벤트 발행
+        etcInoutEventPublisher.publishCreated(buildEtcInoutEvent(savedOrder, userId, List.of()));
 
         return savedOrder.getId();
     }
@@ -420,6 +440,9 @@ public class EtcInoutService {
         order.approve(userId, assignedWorker);
 
         notifyEtcInout("APPROVED", order, userId, true);
+
+        // 통계/대시보드 카운트용 — 승인 이벤트 발행
+        etcInoutEventPublisher.publishApproved(buildEtcInoutEvent(order, userId, List.of()));
     }
 
     // 외부(EtcInoutItemService)에서도 호출 가능한 검증 진입점.
@@ -670,6 +693,7 @@ public class EtcInoutService {
             itemMap.put(it.getId(), it);
         }
 
+        List<EtcInoutStockEvent.Item> evtItems = new ArrayList<>();
         for (EtcInoutCompletePickReqDto.Item req : dto.getItems()) {
             EtcInoutOrderItem item = itemMap.get(req.getItemId());
             if (item == null) {
@@ -682,11 +706,19 @@ public class EtcInoutService {
             // 실제 픽업한 수량만 재고 차감
             if (picked > 0) {
                 applyOutboundInventory(clientId, order, item, picked, userId);
+                evtItems.add(EtcInoutStockEvent.Item.builder()
+                        .productId(item.getProductId())
+                        .locationId(item.getLocationId())
+                        .qty(picked)
+                        .build());
             }
         }
 
         order.complete(userId);
         notifyEtcInout("COMPLETED", order, userId, false);
+
+        // 통계/대시보드 카운트용 — 완료 이벤트 발행
+        etcInoutEventPublisher.publishCompleted(buildEtcInoutEvent(order, userId, evtItems));
     }
 
     // 출고 IoType 별 재고 차감 (작업자가 입력한 pickedQty 만큼만)
@@ -728,6 +760,7 @@ public class EtcInoutService {
         }
 
         // 요청 검증 + 결과 기록
+        List<EtcInoutStockEvent.Item> evtItems = new ArrayList<>();
         for (EtcInoutCompleteWorkReqDto.Item req : dto.getItems()) {
             EtcInoutOrderItem item = itemMap.get(req.getItemId());
             if (item == null) {
@@ -751,10 +784,22 @@ public class EtcInoutService {
 
             // 재고 반영 (정상/불량 분기)
             applyInventory(clientId, order, item, processed, defect, req.getDefectLocationId(), userId);
+
+            int total = processed + defect;
+            if (total > 0) {
+                evtItems.add(EtcInoutStockEvent.Item.builder()
+                        .productId(item.getProductId())
+                        .locationId(req.getLocationId() != null ? req.getLocationId() : item.getLocationId())
+                        .qty(total)
+                        .build());
+            }
         }
 
         order.complete(userId);
         notifyEtcInout("COMPLETED", order, userId, false);
+
+        // 통계/대시보드 카운트용 — 완료 이벤트 발행
+        etcInoutEventPublisher.publishCompleted(buildEtcInoutEvent(order, userId, evtItems));
     }
 
     /**
@@ -853,6 +898,7 @@ public class EtcInoutService {
         List<EtcInoutOrderItem> items = itemRepository.findByEtcOrderId(id);
 
         // 품목별 재고 변동 처리 — 입고는 전량 정상, 출고는 전량 픽업
+        List<EtcInoutStockEvent.Item> evtItems = new ArrayList<>();
         for (EtcInoutOrderItem item : items) {
             if (order.getDirection() == Direction.in) {
                 applyInventory(clientId, order, item, item.getQty(), 0, null, userId);
@@ -861,10 +907,20 @@ public class EtcInoutService {
                 applyOutboundInventory(clientId, order, item, item.getQty(), userId);
                 item.recordPickResult(item.getQty(), userId);
             }
+            if (item.getQty() > 0) {
+                evtItems.add(EtcInoutStockEvent.Item.builder()
+                        .productId(item.getProductId())
+                        .locationId(item.getLocationId())
+                        .qty(item.getQty())
+                        .build());
+            }
         }
 
         order.complete(userId);
         notifyEtcInout("COMPLETED", order, userId, false);
+
+        // 통계/대시보드 카운트용 — 완료 이벤트 발행
+        etcInoutEventPublisher.publishCompleted(buildEtcInoutEvent(order, userId, evtItems));
     }
 
     // IoType + 정상/불량 분기 재고 반영
@@ -943,6 +999,9 @@ public class EtcInoutService {
         for (EtcInoutOrderItem item : items) {
             item.updateStatus(EtcInoutItemStatus.cancelled);
         }
+
+        // 통계/대시보드 카운트용 — 취소 이벤트 발행
+        etcInoutEventPublisher.publishCancelled(buildEtcInoutEvent(order, null, List.of()));
     }
 
 }

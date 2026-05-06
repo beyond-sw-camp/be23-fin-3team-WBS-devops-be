@@ -30,6 +30,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -121,7 +122,13 @@ public class PendingOrderService {
             all = all.stream().filter(d -> type.equalsIgnoreCase(d.getType())).toList();
         }
         if (category != null && !"ALL".equalsIgnoreCase(category)) {
-            all = all.stream().filter(d -> category.equalsIgnoreCase(d.getCategory())).toList();
+            // 가상 카테고리 — 미처리(PENDING) = 지연/오늘마감/진행중/승인대기 합집합 (완료/취소 제외)
+            if ("PENDING".equalsIgnoreCase(category)) {
+                Set<String> pending = Set.of("DELAYED", "TODAY", "IN_PROGRESS", "PENDING_APPROVAL");
+                all = all.stream().filter(d -> pending.contains(d.getCategory())).toList();
+            } else {
+                all = all.stream().filter(d -> category.equalsIgnoreCase(d.getCategory())).toList();
+            }
         }
         if (status != null && !"ALL".equalsIgnoreCase(status)) {
             all = all.stream().filter(d -> status.equalsIgnoreCase(d.getStatus())).toList();

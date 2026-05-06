@@ -27,6 +27,8 @@ import com.beyond.wbs.transfer.repository.TransferOrderItemRepository;
 import com.beyond.wbs.transfer.repository.TransferOrderRepository;
 import com.beyond.wbs.document.instruction.domain.InstructionDocumentType;
 import com.beyond.wbs.document.instruction.event.InstructionIssueRequested;
+import com.beyond.wbs.kafka.event.TransferStockEvent;
+import com.beyond.wbs.transfer.kafka.TransferEventPublisher;
 import com.beyond.wbs.websocket.WorkEventMessage;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -64,6 +66,7 @@ public class TransferOrderService {
     private final WebSocketPublisher webSocketPublisher;
     private final ApplicationEventPublisher applicationEventPublisher;
     private final WorkAssignmentService workAssignmentService;
+    private final TransferEventPublisher transferEventPublisher;
 
     public TransferOrderService(TransferOrderRepository transferOrderRepository,
                                  TransferOrderItemRepository transferOrderItemRepository,
@@ -74,7 +77,8 @@ public class TransferOrderService {
                                  MasterServiceClient masterServiceClient,
                                  WebSocketPublisher webSocketPublisher,
                                  ApplicationEventPublisher applicationEventPublisher,
-                                 WorkAssignmentService workAssignmentService) {
+                                 WorkAssignmentService workAssignmentService,
+                                 TransferEventPublisher transferEventPublisher) {
         this.transferOrderRepository = transferOrderRepository;
         this.transferOrderItemRepository = transferOrderItemRepository;
         this.transferExecutionRepository = transferExecutionRepository;
@@ -85,6 +89,7 @@ public class TransferOrderService {
         this.webSocketPublisher = webSocketPublisher;
         this.applicationEventPublisher = applicationEventPublisher;
         this.workAssignmentService = workAssignmentService;
+        this.transferEventPublisher = transferEventPublisher;
     }
 
     /** 창고 이름 조회 실패 시 null 반환 (전체 응답은 살려둠). */
@@ -182,6 +187,15 @@ public class TransferOrderService {
                         .userId(userId)
                         .occurredAt(now)
                         .build());
+
+        // 통계/대시보드 카운트용 — 생성 이벤트 발행 (재고 영향 없음)
+        transferEventPublisher.publishCreated(TransferStockEvent.builder()
+                .clientId(clientId)
+                .warehouseId(order.getFromWarehouseId())
+                .refId(order.getId())
+                .userId(userId)
+                .items(List.of())
+                .build());
 
         return TransferOrderResDto.fromEntity(order, "", "", dto.getItems().size(), totalQty, itemResList);
     }
@@ -324,6 +338,15 @@ public class TransferOrderService {
                 .build();
         webSocketPublisher.send("/topic/admin/transfer/" + clientId, approvedMsg);
         webSocketPublisher.send("/topic/admin/transfer/" + clientId + "/" + order.getId(), approvedMsg);
+
+        // 통계/대시보드 카운트용 — 승인 이벤트 발행
+        transferEventPublisher.publishApproved(TransferStockEvent.builder()
+                .clientId(clientId)
+                .warehouseId(order.getFromWarehouseId())
+                .refId(order.getId())
+                .userId(approverId)
+                .items(List.of())
+                .build());
     }
 
     /**
@@ -345,6 +368,14 @@ public class TransferOrderService {
                 .build();
         webSocketPublisher.send("/topic/admin/transfer/" + clientId, cancelledMsg);
         webSocketPublisher.send("/topic/admin/transfer/" + clientId + "/" + order.getId(), cancelledMsg);
+
+        // 통계/대시보드 카운트용 — 취소 이벤트 발행
+        transferEventPublisher.publishCancelled(TransferStockEvent.builder()
+                .clientId(clientId)
+                .warehouseId(order.getFromWarehouseId())
+                .refId(order.getId())
+                .items(List.of())
+                .build());
     }
 
     // =========================================================================
@@ -388,6 +419,14 @@ public class TransferOrderService {
                 .build();
         webSocketPublisher.send("/topic/admin/transfer/" + clientId, closeMsg);
         webSocketPublisher.send("/topic/admin/transfer/" + clientId + "/" + order.getId(), closeMsg);
+
+        // 통계/대시보드 카운트용 — 마감 이벤트 발행 (리드타임 집계용)
+        transferEventPublisher.publishCompleted(TransferStockEvent.builder()
+                .clientId(clientId)
+                .warehouseId(order.getFromWarehouseId())
+                .refId(order.getId())
+                .items(List.of())
+                .build());
     }
 
     /**
@@ -445,6 +484,35 @@ public class TransferOrderService {
                     order.getToWarehouseId(), item.getToLocationId(),
                     defectQty, order.getId(), userId);
         }
+
+        // 통계/대시보드 카운트용 — out + in 이벤트 발행 (창고별 처리량 집계)
+        int totalQty = goodQty + defectQty;
+        if (totalQty > 0) {
+            TransferStockEvent.Item evtItem = TransferStockEvent.Item.builder()
+                    .productId(item.getProductId())
+                    .locationId(item.getFromLocationId())
+                    .qty(totalQty)
+                    .build();
+            transferEventPublisher.publishOut(TransferStockEvent.builder()
+                    .clientId(clientId)
+                    .warehouseId(order.getFromWarehouseId())
+                    .refId(order.getId())
+                    .userId(userId)
+                    .items(List.of(evtItem))
+                    .build());
+            TransferStockEvent.Item inItem = TransferStockEvent.Item.builder()
+                    .productId(item.getProductId())
+                    .locationId(item.getToLocationId())
+                    .qty(totalQty)
+                    .build();
+            transferEventPublisher.publishIn(TransferStockEvent.builder()
+                    .clientId(clientId)
+                    .warehouseId(order.getToWarehouseId())
+                    .refId(order.getId())
+                    .userId(userId)
+                    .items(List.of(inItem))
+                    .build());
+        }
     }
 
     // =========================================================================
@@ -488,6 +556,20 @@ public class TransferOrderService {
                 order.getFromWarehouseId(), item.getFromLocationId(),
                 order.getToWarehouseId(),
                 qty, order.getId(), userId);
+
+        // 통계/대시보드 카운트용 — 출발지에서 빠짐 (PICK)
+        TransferStockEvent.Item outItem = TransferStockEvent.Item.builder()
+                .productId(item.getProductId())
+                .locationId(item.getFromLocationId())
+                .qty(qty)
+                .build();
+        transferEventPublisher.publishOut(TransferStockEvent.builder()
+                .clientId(clientId)
+                .warehouseId(order.getFromWarehouseId())
+                .refId(order.getId())
+                .userId(userId)
+                .items(List.of(outItem))
+                .build());
     }
 
     /**
@@ -537,6 +619,22 @@ public class TransferOrderService {
                     defectQty, order.getId(), userId);
         }
 
+        // 통계/대시보드 카운트용 — 도착지에 도착 (PLACE)
+        if (placeQty > 0) {
+            TransferStockEvent.Item inItem = TransferStockEvent.Item.builder()
+                    .productId(item.getProductId())
+                    .locationId(item.getToLocationId())
+                    .qty(placeQty)
+                    .build();
+            transferEventPublisher.publishIn(TransferStockEvent.builder()
+                    .clientId(clientId)
+                    .warehouseId(order.getToWarehouseId())
+                    .refId(order.getId())
+                    .userId(userId)
+                    .items(List.of(inItem))
+                    .build());
+        }
+
         // 자동 마감 — 모든 품목이 처리 완료되면 지시서 상태 전환
         List<TransferOrderItem> allItems = transferOrderItemRepository.findByTransferOrderId(order.getId());
         boolean allDone = allItems.stream()
@@ -561,6 +659,15 @@ public class TransferOrderService {
                     .build();
             webSocketPublisher.send("/topic/admin/transfer/" + clientId, closeMsg);
             webSocketPublisher.send("/topic/admin/transfer/" + clientId + "/" + order.getId(), closeMsg);
+
+            // 통계/대시보드 카운트용 — 마감 이벤트 발행 (리드타임 집계용)
+            transferEventPublisher.publishCompleted(TransferStockEvent.builder()
+                    .clientId(clientId)
+                    .warehouseId(order.getFromWarehouseId())
+                    .refId(order.getId())
+                    .userId(userId)
+                    .items(List.of())
+                    .build());
         }
     }
 

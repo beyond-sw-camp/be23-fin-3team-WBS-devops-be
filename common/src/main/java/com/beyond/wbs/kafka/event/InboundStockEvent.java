@@ -29,6 +29,8 @@ public class InboundStockEvent {
     private UUID refId;
     /** 행위자 — 이 변동을 발생시킨 사용자 ID. 시스템 자동작업이면 SYSTEM_USER_ID. */
     private UUID userId;
+    /** 입고 구분 — "purchase_order" | "manual" | "return". 통계 대시보드 분기용. */
+    private String originType;
     private List<Item> items;
 
     /**

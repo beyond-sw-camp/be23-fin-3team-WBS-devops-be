@@ -627,6 +627,7 @@ public class OutboundService {
                 .warehouseId(outboundOrders.getWarehouseId())
                 .refId(outboundOrders.getId())
                 .userId(userId)
+                .originType(outboundOrders.getOriginType())
                 .items(eventItems)
                 .build());
 
@@ -685,6 +686,7 @@ public class OutboundService {
                     .warehouseId(order.getWarehouseId())
                     .refId(order.getId())
                     .userId(userId)
+                    .originType(order.getOriginType())
                     .items(eventItems)
                     .build());
         }
@@ -764,6 +766,7 @@ public class OutboundService {
                 .warehouseId(outboundOrder.getWarehouseId())
                 .refId(outboundOrder.getId())
                 .userId(userId)
+                .originType(outboundOrder.getOriginType())
                 .items(List.of())
                 .build());
 
@@ -895,6 +898,7 @@ public class OutboundService {
                 .warehouseId(outboundOrder.getWarehouseId())
                 .refId(outboundOrder.getId())
                 .userId(userId)
+                .originType(outboundOrder.getOriginType())
                 .items(List.of())
                 .build());
 
@@ -1015,6 +1019,7 @@ public class OutboundService {
                 .warehouseId(order.getWarehouseId())
                 .refId(order.getId())
                 .userId(userId)
+                .originType(order.getOriginType())
                 .items(eventItems)
                 .build());
 
@@ -1124,6 +1129,7 @@ public class OutboundService {
                 .warehouseId(warehouseId)
                 .refId(outboundOrderId)
                 .userId(userId)
+                .originType(order.getOriginType())
                 .items(eventItems)
                 .build());
 

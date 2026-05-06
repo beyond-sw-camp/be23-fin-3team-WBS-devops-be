@@ -603,6 +603,7 @@ public class InboundService {
                 .warehouseId(warehouseId)
                 .refId(inboundOrder.getId())
                 .userId(userId)
+                .originType(inboundOrder.getOriginType())
                 .items(List.of())
                 .build());
 
@@ -667,6 +668,7 @@ public class InboundService {
                 .warehouseId(warehouseId)
                 .refId(inboundOrder.getId())
                 .userId(userId)
+                .originType(inboundOrder.getOriginType())
                 .items(List.of())
                 .build());
 
@@ -772,6 +774,7 @@ public class InboundService {
                 .warehouseId(dto.getWarehouseId())
                 .refId(inboundOrder.getId())
                 .userId(userId)
+                .originType(inboundOrder.getOriginType())
                 .items(List.of())
                 .build());
 
@@ -1427,6 +1430,7 @@ public class InboundService {
                 .warehouseId(order.getWarehouseId())
                 .refId(orderId)
                 .userId(userId)
+                .originType(order.getOriginType())
                 .items(eventItems)
                 .build());
 
@@ -1491,6 +1495,7 @@ public class InboundService {
                     .warehouseId(order.getWarehouseId())
                     .refId(orderId)
                     .userId(userId)
+                    .originType(order.getOriginType())
                     .items(eventItems)
                     .build());
         }
@@ -1732,6 +1737,7 @@ public class InboundService {
                     .warehouseId(order.getWarehouseId())
                     .refId(orderId)
                     .userId(userId)
+                    .originType(order.getOriginType())
                     .items(normalItems)
                     .defectItems(defectItems.isEmpty() ? null : defectItems)
                     .build());
@@ -2450,7 +2456,10 @@ public class InboundService {
             po.startProgress();
         }
 
-        // 5. 재고 반영
+        // 5. 재고 반영 — originType 은 이벤트 페이로드에 같이 실어 통계 분기에 사용
+        InboundOrders inboundForOrigin = inboundOrderRepository.findById(po.getInboundOrderId()).orElse(null);
+        String inboundOriginType = inboundForOrigin != null ? inboundForOrigin.getOriginType() : null;
+
         if (item.isDefect()) {
             // 검수 때 이미 defect 로 분류됐던 품목: defect@null → defect@실위치 (직접 호출)
             inventoryService.relocateDefect(
@@ -2472,6 +2481,7 @@ public class InboundService {
                         .warehouseId(po.getWarehouseId())
                         .refId(po.getInboundOrderId())
                         .userId(userId)
+                        .originType(inboundOriginType)
                         .items(List.of(normalEvent))
                         .build());
             }
@@ -2488,6 +2498,7 @@ public class InboundService {
                         .warehouseId(po.getWarehouseId())
                         .refId(po.getInboundOrderId())
                         .userId(userId)
+                        .originType(inboundOriginType)
                         .items(List.of(defectEvent))
                         .build());
                 log.info("[적치 불량] inboundOrderId={}, placementItemId={}, qty={}, reason={}",
@@ -2496,7 +2507,7 @@ public class InboundService {
         }
 
         // 6. 입고 지시서의 모든 적치 완료인지 자동 판정 + 웹 알림
-        InboundOrders order = inboundOrderRepository.findById(po.getInboundOrderId()).orElse(null);
+        InboundOrders order = inboundForOrigin;
         InboundOrderStatus before = order != null ? order.getStatus() : null;
 
         long pendingInOrder = placementItemRepository.countPendingByInboundOrderId(po.getInboundOrderId());
@@ -2535,6 +2546,16 @@ public class InboundService {
                     .build();
             webSocketPublisher.send("/topic/admin/inbound/" + clientId, closeMsg);
             webSocketPublisher.send("/topic/admin/inbound/" + clientId + "/" + orderId, closeMsg);
+
+            // 통계/대시보드 카운트용 — 마감 이벤트 발행 (진행 중 카운트 -1)
+            inboundEventPublisher.publishOrderCompleted(InboundStockEvent.builder()
+                    .clientId(clientId)
+                    .warehouseId(po.getWarehouseId())
+                    .refId(orderId)
+                    .userId(userId)
+                    .originType(inboundOriginType)
+                    .items(List.of())
+                    .build());
         }
     }
 
@@ -2610,6 +2631,16 @@ public class InboundService {
                     .build();
             webSocketPublisher.send("/topic/admin/inbound/" + clientId, closeMsg);
             webSocketPublisher.send("/topic/admin/inbound/" + clientId + "/" + inboundOrderId, closeMsg);
+
+            // 통계/대시보드 카운트용 — 마감 이벤트 발행 (진행 중 카운트 -1)
+            inboundEventPublisher.publishOrderCompleted(InboundStockEvent.builder()
+                    .clientId(clientId)
+                    .warehouseId(inboundOrder.getWarehouseId())
+                    .refId(inboundOrderId)
+                    .userId(userId)
+                    .originType(inboundOrder.getOriginType())
+                    .items(List.of())
+                    .build());
         }
 
         // [Kafka] 적치 완료 이벤트 발행
@@ -2631,6 +2662,7 @@ public class InboundService {
                     .warehouseId(inboundOrder.getWarehouseId())
                     .refId(inboundOrderId)
                     .userId(userId)
+                    .originType(inboundOrder.getOriginType())
                     .items(eventItems)
                     .build());
         }

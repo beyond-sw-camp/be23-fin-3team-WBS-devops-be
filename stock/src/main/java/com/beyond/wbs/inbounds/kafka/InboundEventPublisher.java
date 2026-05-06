@@ -76,4 +76,13 @@ public class InboundEventPublisher {
         log.info("[Kafka 발행] inbound.placed | refId={}", event.getRefId());
         kafkaTemplate.send("inbound.placed", event.getRefId().toString(), event);
     }
+
+    /**
+     * 입고지시서 마감 이벤트 발행 — 통계/대시보드 전용 (재고 영향 없음).
+     * 입고지시서 status 가 completed/partial 로 transition 하는 시점에 1번만 호출.
+     */
+    public void publishOrderCompleted(InboundStockEvent event) {
+        log.info("[Kafka 발행] inbound.order-completed | refId={}", event.getRefId());
+        kafkaTemplate.send("inbound.order-completed", event.getRefId().toString(), event);
+    }
 }
