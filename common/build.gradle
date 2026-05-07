@@ -6,7 +6,7 @@ plugins {
 }
 
 group = 'com.beyond'
-version = '0.0.1-SNAPSHOT'
+version = System.getenv('COMMON_VERSION') ?: '0.0.1-SNAPSHOT'
 
 // 라이브러리이므로 bootJar 비활성화, 일반 jar 활성화
 bootJar { enabled = false }

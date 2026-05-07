@@ -6,6 +6,7 @@ plugins {
 
 group = 'com.beyond'
 version = '0.0.1-SNAPSHOT'
+def commonVersion = project.findProperty('common.version') ?: System.getenv('COMMON_VERSION') ?: '0.0.1-SNAPSHOT'
 
 java {
     toolchain {
@@ -40,7 +41,7 @@ dependencyManagement {
 dependencies {
     // --- 사내 공통 라이브러리 (Maven Local) ---
     // ai-service는 WebFlux 사용이므로 common의 Servlet(Tomcat) 스택은 제외
-    implementation('com.beyond:common:0.0.1-SNAPSHOT') {
+    implementation("com.beyond:common:${commonVersion}") {
         exclude group: 'org.springframework.boot', module: 'spring-boot-starter-web'
     }
 

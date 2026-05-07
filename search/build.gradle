@@ -6,6 +6,7 @@ plugins {
 
 group = 'com.beyond'
 version = '0.0.1-SNAPSHOT'
+def commonVersion = project.findProperty('common.version') ?: System.getenv('COMMON_VERSION') ?: '0.0.1-SNAPSHOT'
 
 java {
     toolchain {
@@ -34,7 +35,7 @@ dependencyManagement {
 
 dependencies {
     // common 모듈 (AuditLogEvent DTO)
-    implementation 'com.beyond:common:0.0.1-SNAPSHOT'
+    implementation "com.beyond:common:${commonVersion}"
 
     // Spring Boot
     implementation 'org.springframework.boot:spring-boot-starter-web'
