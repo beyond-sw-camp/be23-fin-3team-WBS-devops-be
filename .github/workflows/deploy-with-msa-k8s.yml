@@ -1,0 +1,147 @@
+name: Deploy MSA to EKS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'common/**'
+      - 'apigateway/**'
+      - 'account/**'
+      - 'master/**'
+      - 'stock/**'
+      - 'search/**'
+      - 'k8s/**'
+      - '.github/workflows/deploy-with-msa-k8s.yml'
+  workflow_dispatch:
+
+env:
+  AWS_REGION: ap-northeast-2
+  AWS_ACCOUNT_ID: '739272173743'
+  EKS_CLUSTER_NAME: wbs-cluster
+  K8S_NAMESPACE: wbs-ns
+
+jobs:
+  publish-common:
+    name: Publish common package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Grant common gradlew exec
+        run: chmod +x ./common/gradlew
+
+      - name: Publish common to GitHub Packages
+        working-directory: ./common
+        run: ./gradlew publish --no-daemon
+        env:
+          GPR_USER: ${{ secrets.GPR_USER }}
+          GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
+
+  build-and-push:
+    name: Build and push service images
+    runs-on: ubuntu-latest
+    needs: publish-common
+    permissions:
+      contents: read
+      packages: read
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: apigateway
+            dockerfile: apigateway/Dockerfile
+            image: wbs/apigateway
+          - service: account
+            dockerfile: account/Dockerfile
+            image: wbs/account-service
+          - service: master
+            dockerfile: master/Dockerfile
+            image: wbs/master-service
+          - service: stock
+            dockerfile: stock/Dockerfile
+            image: wbs/stock-service
+          - service: search
+            dockerfile: search/Dockerfile
+            image: wbs/search-service
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push ${{ matrix.service }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ matrix.image }}:latest
+          secrets: |
+            gpr_user=${{ secrets.GPR_USER }}
+            gpr_token=${{ secrets.GPR_TOKEN }}
+
+  deploy:
+    name: Apply Kubernetes manifests
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --region "$AWS_REGION" --name "$EKS_CLUSTER_NAME"
+
+      - name: Apply application manifests
+        run: |
+          kubectl apply -f account/k8s/depl_svc.yml
+          kubectl apply -f master/k8s/depl_svc.yml
+          kubectl apply -f stock/k8s/depl_svc.yml
+          kubectl apply -f search/k8s/depl_svc.yml
+          kubectl apply -f apigateway/k8s/depl_svc.yml
+
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/account-deployment -n "$K8S_NAMESPACE" --timeout=180s
+          kubectl rollout status deployment/master-deployment -n "$K8S_NAMESPACE" --timeout=180s
+          kubectl rollout status deployment/stock-deployment -n "$K8S_NAMESPACE" --timeout=240s
+          kubectl rollout status deployment/search-deployment -n "$K8S_NAMESPACE" --timeout=180s
+          kubectl rollout status deployment/apigateway-deployment -n "$K8S_NAMESPACE" --timeout=180s

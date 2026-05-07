@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: account-deployment
+  namespace: wbs-ns
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: account
+  template:
+    metadata:
+      labels:
+        app: account
+    spec:
+      containers:
+      - name: account
+        image: 739272173743.dkr.ecr.ap-northeast-2.amazonaws.com/wbs/account-service:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: prod
+        - name: ACCOUNT_SERVER_PORT
+          value: "8080"
+        - name: ACCOUNT_DB_URL
+          value: jdbc:mysql://database-1.cliqi2umyj97.ap-northeast-2.rds.amazonaws.com:3306/account_db?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+        - name: ACCOUNT_DB_USERNAME
+          value: wbs_account
+        - name: ACCOUNT_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: wbs-secrets
+              key: ACCOUNT_DB_PASSWORD
+        - name: REDIS_HOST
+          value: redis-service
+        - name: REDIS_PORT
+          value: "6379"
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: kafka-service:9092
+        - name: JWT_EXPIRATION_MINUTES
+          value: "30"
+        - name: JWT_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: wbs-secrets
+              key: JWT_SECRET_KEY
+        - name: JWT_REFRESH_EXPIRATION_MINUTES
+          value: "30000"
+        - name: JWT_REFRESH_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: wbs-secrets
+              key: JWT_REFRESH_SECRET_KEY
+        resources:
+          limits:
+            cpu: "1"
+            memory: "512Mi"
+          requests:
+            cpu: "250m"
+            memory: "256Mi"
+        readinessProbe:
+          tcpSocket:
+            port: 8080
+          initialDelaySeconds: 20
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: account-service
+  namespace: wbs-ns
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 8080
+  selector:
+    app: account

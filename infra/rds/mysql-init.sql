@@ -1,0 +1,24 @@
+-- WBS MySQL RDS initialization.
+-- Run this with the RDS master user after the MySQL RDS instance is available.
+
+CREATE DATABASE IF NOT EXISTS account_db
+  DEFAULT CHARACTER SET utf8mb4
+  DEFAULT COLLATE utf8mb4_unicode_ci;
+
+CREATE DATABASE IF NOT EXISTS master_db
+  DEFAULT CHARACTER SET utf8mb4
+  DEFAULT COLLATE utf8mb4_unicode_ci;
+
+CREATE DATABASE IF NOT EXISTS stock_db
+  DEFAULT CHARACTER SET utf8mb4
+  DEFAULT COLLATE utf8mb4_unicode_ci;
+
+CREATE USER IF NOT EXISTS 'wbs_account'@'%' IDENTIFIED BY 'CHANGE_ME_ACCOUNT_DB_PASSWORD';
+CREATE USER IF NOT EXISTS 'wbs_master'@'%' IDENTIFIED BY 'CHANGE_ME_MASTER_DB_PASSWORD';
+CREATE USER IF NOT EXISTS 'wbs_stock'@'%' IDENTIFIED BY 'CHANGE_ME_STOCK_DB_PASSWORD';
+
+GRANT ALL PRIVILEGES ON account_db.* TO 'wbs_account'@'%';
+GRANT ALL PRIVILEGES ON master_db.* TO 'wbs_master'@'%';
+GRANT ALL PRIVILEGES ON stock_db.* TO 'wbs_stock'@'%';
+
+FLUSH PRIVILEGES;

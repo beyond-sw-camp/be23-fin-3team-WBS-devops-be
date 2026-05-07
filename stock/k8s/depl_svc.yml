@@ -1,0 +1,145 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: stock-deployment
+  namespace: wbs-ns
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: stock
+  template:
+    metadata:
+      labels:
+        app: stock
+    spec:
+      containers:
+      - name: stock
+        image: 739272173743.dkr.ecr.ap-northeast-2.amazonaws.com/wbs/stock-service:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: prod
+        - name: STOCK_SERVER_PORT
+          value: "8080"
+        - name: STOCK_DB_URL
+          value: jdbc:mysql://database-1.cliqi2umyj97.ap-northeast-2.rds.amazonaws.com:3306/stock_db?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+        - name: STOCK_DB_USERNAME
+          value: wbs_stock
+        - name: STOCK_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: wbs-secrets
+              key: STOCK_DB_PASSWORD
+        - name: REDIS_HOST
+          value: redis-service
+        - name: REDIS_PORT
+          value: "6379"
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: kafka-service:9092
+        - name: STOCK_KAFKA_GROUP_ID
+          value: stock-group
+        - name: STOCK_STREAMS_APPLICATION_ID
+          value: stock-streams
+        - name: STOCK_KAFKA_STREAMS_STATE_DIR
+          value: /tmp/kafka-streams/stock
+        - name: KAFKA_REPLICATION_FACTOR
+          value: "1"
+        - name: SPRING_ELASTICSEARCH_URIS
+          value: http://elasticsearch-service:9200
+        - name: MAIL_HOST
+          value: smtp.gmail.com
+        - name: MAIL_PORT
+          value: "587"
+        - name: MAIL_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: wbs-secrets
+              key: MAIL_USERNAME
+        - name: MAIL_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: wbs-secrets
+              key: MAIL_PASSWORD
+        - name: MAIL_DEBUG
+          value: "false"
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: wbs-secrets
+              key: AWS_ACCESS_KEY_ID
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: wbs-secrets
+              key: AWS_SECRET_ACCESS_KEY
+        - name: AWS_REGION
+          value: ap-northeast-2
+        - name: AWS_S3_INSTRUCTION_BUCKET
+          value: wbs-instruction-docs
+        - name: AWS_S3_INSTRUCTION_PRESIGN_TTL_SECONDS
+          value: "300"
+        - name: AWS_S3_DEFECT_EVIDENCE_BUCKET
+          value: wbs-instruction-docs
+        - name: AWS_S3_DEFECT_EVIDENCE_DOWNLOAD_TTL_SECONDS
+          value: "300"
+        - name: DEFECT_EVIDENCE_MAX_FILE_SIZE_BYTES
+          value: "5242880"
+        - name: DEFECT_EVIDENCE_MAX_PER_SOURCE
+          value: "5"
+        - name: DEFECT_EVIDENCE_ALLOWED_MIME_TYPES
+          value: image/jpeg,image/png,image/webp,image/heic,image/heif
+        - name: MULTIPART_MAX_FILE_SIZE
+          value: 6MB
+        - name: MULTIPART_MAX_REQUEST_SIZE
+          value: 6MB
+        - name: INBOUND_REQUEST_MAIL_TO
+          value: oms-team@example.com
+        - name: INBOUND_REQUEST_MAIL_FROM
+          value: your-smtp-account@example.com
+        - name: INBOUND_REQUEST_MAIL_FROM_NAME
+          value: WMS 시스템
+        - name: INBOUND_REQUEST_MAIL_SUBJECT_PREFIX
+          value: "[기타출고] 입고 요청"
+        - name: INSTRUCTION_DOCUMENT_TOPIC
+          value: instruction.issued
+        - name: INSTRUCTION_DOCUMENT_CONSUMER_GROUP
+          value: instruction-doc-group
+        - name: INSTRUCTION_DOCUMENT_DLQ_TOPIC
+          value: instruction.issued.dlq
+        - name: INSTRUCTION_DOCUMENT_RETRY_MAX_ATTEMPTS
+          value: "3"
+        - name: INSTRUCTION_DOCUMENT_RETRY_INITIAL_INTERVAL_MS
+          value: "500"
+        - name: INSTRUCTION_DOCUMENT_RETRY_MULTIPLIER
+          value: "2.0"
+        - name: ACCOUNT_SERVICE_URL
+          value: http://account-service
+        - name: MASTER_SERVICE_URL
+          value: http://master-service
+        resources:
+          limits:
+            cpu: "1"
+            memory: "768Mi"
+          requests:
+            cpu: "300m"
+            memory: "384Mi"
+        readinessProbe:
+          tcpSocket:
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: stock-service
+  namespace: wbs-ns
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 8080
+  selector:
+    app: stock

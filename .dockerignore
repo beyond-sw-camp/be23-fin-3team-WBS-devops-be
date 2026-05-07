@@ -1,0 +1,10 @@
+.git
+.gradle
+**/.gradle
+**/build
+**/.idea
+**/.DS_Store
+.env
+.env.*
+!.env.example
+**/src/main/resources/application-local.yml
