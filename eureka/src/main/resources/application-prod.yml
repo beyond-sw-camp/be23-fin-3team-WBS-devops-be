@@ -1,5 +1,5 @@
 server:
-  port: ${EUREKA_SERVER_PORT:8761}
+  port: 8761
 
 eureka:
   client:
@@ -7,6 +7,6 @@ eureka:
     fetch-registry: false
   server:
     enable-self-preservation: true
-    eviction-interval-timer-in-ms: ${EUREKA_EVICTION_INTERVAL_MS:60000}
-    response-cache-update-interval-ms: ${EUREKA_RESPONSE_CACHE_UPDATE_INTERVAL_MS:30000}
-    response-cache-auto-expiration-in-seconds: ${EUREKA_RESPONSE_CACHE_AUTO_EXPIRATION_SECONDS:180}
+    eviction-interval-timer-in-ms: 60000
+    response-cache-update-interval-ms: 30000
+    response-cache-auto-expiration-in-seconds: 180

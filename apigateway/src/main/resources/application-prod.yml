@@ -3,12 +3,7 @@ server:
 
 eureka:
   client:
-    service-url:
-      defaultZone: ${EUREKA_DEFAULT_ZONE:http://eureka:8761/eureka/}
-    register-with-eureka: true
-    fetch-registry: true
-  instance:
-    prefer-ip-address: true
+    enabled: false
 
 spring:
   cloud:
@@ -29,25 +24,25 @@ spring:
             - Path=/account-service/**
           filters:
             - StripPrefix=1
-          uri: lb://account-service
+          uri: ${ACCOUNT_SERVICE_URI:http://account-service}
         - id: master-service
           predicates:
             - Path=/master-service/**
           filters:
             - StripPrefix=1
-          uri: lb://master-service
+          uri: ${MASTER_SERVICE_URI:http://master-service}
         - id: stock-service
           predicates:
             - Path=/stock-service/**
           filters:
             - StripPrefix=1
-          uri: lb://stock-service
+          uri: ${STOCK_SERVICE_URI:http://stock-service}
         - id: search-service
           predicates:
             - Path=/search-service/**
           filters:
             - StripPrefix=1
-          uri: lb://search-service
+          uri: ${SEARCH_SERVICE_URI:http://search-service}
 
 jwt:
   secretKey: ${JWT_SECRET_KEY}

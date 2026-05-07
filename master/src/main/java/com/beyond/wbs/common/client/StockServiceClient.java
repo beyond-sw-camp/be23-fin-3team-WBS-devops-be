@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-@FeignClient(name = "stock-service")
+@FeignClient(name = "stock-service", url = "${services.stock.url:}")
 public interface StockServiceClient {
 
     @PostMapping("/inventory/has-stock")

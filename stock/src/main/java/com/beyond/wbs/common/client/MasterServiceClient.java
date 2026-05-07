@@ -16,9 +16,9 @@ import java.util.UUID;
  * Master 모듈 Feign Client
  *
  * stock 모듈에서 master 모듈의 API를 호출할 때 사용.
- * @FeignClient(name = "master-service") → Eureka에서 master-service 주소를 자동 조회.
+ * local은 서비스 이름 기반 로드밸런싱, prod는 K8s Service DNS URL을 사용한다.
  */
-@FeignClient(name = "master-service")
+@FeignClient(name = "master-service", url = "${services.master.url:}")
 public interface MasterServiceClient {
 
     // ============ 창고 ============
