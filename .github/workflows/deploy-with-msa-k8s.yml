@@ -114,6 +114,7 @@ jobs:
         include:
           # ===================== apigateway =====================
           - service: apigateway
+            path: apigateway
             repository: wbs/apigateway
             dockerfile: apigateway/Dockerfile
             manifest: apigateway/k8s/depl_svc.yml
@@ -121,6 +122,7 @@ jobs:
 
           # ===================== account =====================
           - service: account
+            path: account
             repository: wbs/account-service
             dockerfile: account/Dockerfile
             manifest: account/k8s/depl_svc.yml
@@ -128,6 +130,7 @@ jobs:
 
           # ===================== master =====================
           - service: master
+            path: master
             repository: wbs/master-service
             dockerfile: master/Dockerfile
             manifest: master/k8s/depl_svc.yml
@@ -135,6 +138,7 @@ jobs:
 
           # ===================== stock =====================
           - service: stock
+            path: stock
             repository: wbs/stock-service
             dockerfile: stock/Dockerfile
             manifest: stock/k8s/depl_svc.yml
@@ -142,6 +146,7 @@ jobs:
 
           # ===================== search =====================
           - service: search
+            path: search
             repository: wbs/search-service
             dockerfile: search/Dockerfile
             manifest: search/k8s/depl_svc.yml
@@ -149,6 +154,7 @@ jobs:
 
           # ===================== ai-service =====================
           - service: ai-service
+            path: ai-service
             repository: wbs/ai-service
             dockerfile: ai-service/Dockerfile
             manifest: ai-service/k8s/depl_svc.yml
@@ -157,8 +163,30 @@ jobs:
     steps:
       - name: checkout github
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: detect ${{ matrix.service }} changes
+        id: service-changes
+        env:
+          COMMON_CHANGED: ${{ needs.prepare-common.outputs.common-changed }}
+          SERVICE_PATH: ${{ matrix.path }}
+        run: |
+          should_deploy=false
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            should_deploy=true
+          elif [ "$COMMON_CHANGED" = "true" ]; then
+            should_deploy=true
+          elif git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" | grep -q "^${SERVICE_PATH}/"; then
+            should_deploy=true
+          fi
+
+          echo "should-deploy=${should_deploy}" >> "$GITHUB_OUTPUT"
+          echo "${{ matrix.service }} should-deploy=${should_deploy}"
 
       - name: configure aws
+        if: steps.service-changes.outputs.should-deploy == 'true'
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -166,15 +194,19 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: update cluster information
+        if: steps.service-changes.outputs.should-deploy == 'true'
         run: aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$AWS_REGION"
 
       - name: login to ecr
+        if: steps.service-changes.outputs.should-deploy == 'true'
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: set up docker buildx
+        if: steps.service-changes.outputs.should-deploy == 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: ${{ matrix.service }} build and push docker image to ecr
+        if: steps.service-changes.outputs.should-deploy == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -189,9 +221,11 @@ jobs:
             gpr_token=${{ secrets.GPR_TOKEN }}
 
       - name: ${{ matrix.service }} kubectl apply
+        if: steps.service-changes.outputs.should-deploy == 'true'
         run: |
           kubectl apply -f ./${{ matrix.manifest }}
           kubectl rollout restart deployment ${{ matrix.deployment }} -n "$NAMESPACE"
 
       - name: ${{ matrix.service }} wait for rollout
+        if: steps.service-changes.outputs.should-deploy == 'true'
         run: kubectl rollout status deployment/${{ matrix.deployment }} -n "$NAMESPACE" --timeout=240s
