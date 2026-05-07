@@ -18,6 +18,7 @@ jobs:
     outputs:
       common-version: ${{ steps.common.outputs.common-version }}
       common-changed: ${{ steps.common.outputs.common-changed }}
+      common-exists: ${{ steps.package.outputs.common-exists }}
 
     steps:
       - name: checkout github
@@ -43,10 +44,25 @@ jobs:
             echo "common-changed=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: check common package version
+        id: package
+        env:
+          GPR_USER: ${{ secrets.GPR_USER }}
+          GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
+        run: |
+          COMMON_VERSION="${{ steps.common.outputs.common-version }}"
+          METADATA_URL="https://maven.pkg.github.com/beyond-sw-camp/be23-fin-3team-WBS-devops-be/com/beyond/common/maven-metadata.xml"
+
+          if curl -fsL -u "$GPR_USER:$GPR_TOKEN" "$METADATA_URL" | grep -q "<version>${COMMON_VERSION}</version>"; then
+            echo "common-exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "common-exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
   publish-common:
     runs-on: ubuntu-latest
     needs: prepare-common
-    if: needs.prepare-common.outputs.common-changed == 'true'
+    if: needs.prepare-common.outputs.common-changed == 'true' && needs.prepare-common.outputs.common-exists == 'false'
 
     steps:
       - name: checkout github
@@ -58,20 +74,6 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
           cache: gradle
-
-      # ===================== common =====================
-      - name: verify common version is new
-        env:
-          GPR_USER: ${{ secrets.GPR_USER }}
-          GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
-          COMMON_VERSION: ${{ needs.prepare-common.outputs.common-version }}
-        run: |
-          ARTIFACT_URL="https://maven.pkg.github.com/beyond-sw-camp/be23-fin-3team-WBS-devops-be/com/beyond/common/${COMMON_VERSION}/common-${COMMON_VERSION}.jar"
-          if curl -fsI -u "$GPR_USER:$GPR_TOKEN" "$ARTIFACT_URL" > /dev/null; then
-            echo "common version ${COMMON_VERSION} already exists in GitHub Packages."
-            echo "Bump common/VERSION before publishing changed common code."
-            exit 1
-          fi
 
       - name: common publish to github packages
         working-directory: ./common
