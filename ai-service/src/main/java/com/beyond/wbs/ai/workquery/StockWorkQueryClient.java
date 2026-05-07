@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import java.util.List;
 import java.util.Map;
 
-@FeignClient(name = "stock-service")
+@FeignClient(name = "stock-service", url = "${services.stock.url:}")
 public interface StockWorkQueryClient {
 
     @PostMapping("/ai/work-query/execute")

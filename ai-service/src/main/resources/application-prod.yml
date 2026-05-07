@@ -15,7 +15,7 @@ spring:
   jpa:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
-      ddl-auto: validate
+      ddl-auto: ${AI_JPA_DDL_AUTO:update}
     show-sql: false
     open-in-view: false
     properties:
@@ -45,8 +45,19 @@ spring:
         index-type: ${PGVECTOR_INDEX_TYPE:HNSW}
         distance-type: ${PGVECTOR_DISTANCE_TYPE:COSINE_DISTANCE}
         dimensions: ${PGVECTOR_DIMENSIONS:1536}
-        initialize-schema: ${PGVECTOR_INITIALIZE_SCHEMA:false}
+        initialize-schema: ${PGVECTOR_INITIALIZE_SCHEMA:true}
         table-name: ${PGVECTOR_TABLE_NAME:vector_store}
+
+  cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            connect-timeout: ${OPENFEIGN_CONNECT_TIMEOUT_MS:3000}
+            read-timeout: ${OPENFEIGN_READ_TIMEOUT_MS:120000}
+          stock-service:
+            connect-timeout: ${STOCK_SERVICE_CONNECT_TIMEOUT_MS:3000}
+            read-timeout: ${STOCK_SERVICE_READ_TIMEOUT_MS:120000}
 
 wms:
   readonly-datasource:
@@ -54,6 +65,10 @@ wms:
     jdbc-url: ${WMS_READONLY_DB_URL}
     username: ${WMS_READONLY_DB_USERNAME}
     password: ${WMS_READONLY_DB_PASSWORD}
+
+services:
+  stock:
+    url: ${STOCK_SERVICE_URL:http://stock-service}
 
 logging:
   level:

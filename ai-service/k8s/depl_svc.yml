@@ -1,0 +1,99 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-service-deployment
+  namespace: wbs-ns
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ai-service
+  template:
+    metadata:
+      labels:
+        app: ai-service
+    spec:
+      containers:
+      - name: ai-service
+        image: 739272173743.dkr.ecr.ap-northeast-2.amazonaws.com/wbs/ai-service:latest
+        ports:
+        - containerPort: 8080
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: prod
+        - name: AI_SERVER_PORT
+          value: "8080"
+        - name: AI_DB_URL
+          value: jdbc:postgresql://wbs-ai-postgres.cliqi2umyj97.ap-northeast-2.rds.amazonaws.com:5432/ai_db
+        - name: AI_DB_USERNAME
+          value: postgres
+        - name: AI_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: wbs-secrets
+              key: AI_DB_PASSWORD
+        - name: AI_JPA_DDL_AUTO
+          value: update
+        - name: PGVECTOR_INITIALIZE_SCHEMA
+          value: "true"
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: wbs-secrets
+              key: OPENAI_API_KEY
+        - name: OPENAI_CHAT_MODEL
+          value: gpt-4o-mini
+        - name: OPENAI_CHAT_TEMPERATURE
+          value: "0.1"
+        - name: OPENAI_CHAT_MAX_TOKENS
+          value: "220"
+        - name: OPENAI_EMBED_MODEL
+          value: text-embedding-3-small
+        - name: REDIS_HOST
+          value: redis-service
+        - name: REDIS_PORT
+          value: "6379"
+        - name: WMS_READONLY_DB_URL
+          value: jdbc:mysql://database-1.cliqi2umyj97.ap-northeast-2.rds.amazonaws.com:3306/stock_db?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+        - name: WMS_READONLY_DB_USERNAME
+          value: wbs_stock
+        - name: WMS_READONLY_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: wbs-secrets
+              key: WMS_READONLY_DB_PASSWORD
+        - name: OPENFEIGN_CONNECT_TIMEOUT_MS
+          value: "3000"
+        - name: OPENFEIGN_READ_TIMEOUT_MS
+          value: "120000"
+        - name: STOCK_SERVICE_CONNECT_TIMEOUT_MS
+          value: "3000"
+        - name: STOCK_SERVICE_READ_TIMEOUT_MS
+          value: "120000"
+        - name: STOCK_SERVICE_URL
+          value: http://stock-service
+        resources:
+          limits:
+            cpu: "1"
+            memory: "768Mi"
+          requests:
+            cpu: "300m"
+            memory: "384Mi"
+        readinessProbe:
+          tcpSocket:
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-service
+  namespace: wbs-ns
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 8080
+  selector:
+    app: ai-service

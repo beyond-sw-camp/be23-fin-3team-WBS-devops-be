@@ -37,6 +37,8 @@ spec:
           value: http://stock-service
         - name: SEARCH_SERVICE_URI
           value: http://search-service
+        - name: AI_SERVICE_URI
+          value: http://ai-service
         - name: JWT_SECRET_KEY
           valueFrom:
             secretKeyRef:

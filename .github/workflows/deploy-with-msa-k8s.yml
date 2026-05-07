@@ -147,6 +147,13 @@ jobs:
             manifest: search/k8s/depl_svc.yml
             deployment: search-deployment
 
+          # ===================== ai-service =====================
+          - service: ai-service
+            repository: wbs/ai-service
+            dockerfile: ai-service/Dockerfile
+            manifest: ai-service/k8s/depl_svc.yml
+            deployment: ai-service-deployment
+
     steps:
       - name: checkout github
         uses: actions/checkout@v4
