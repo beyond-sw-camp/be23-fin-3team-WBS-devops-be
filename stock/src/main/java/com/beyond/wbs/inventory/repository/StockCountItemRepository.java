@@ -21,4 +21,10 @@ public interface StockCountItemRepository extends JpaRepository<StockCountItem, 
      * 모바일 작업자가 위치 QR 스캔 → 그 위치의 품목들 빠른 접근.
      */
     List<StockCountItem> findByCountOrderIdAndLocationId(UUID countOrderId, UUID locationId);
+
+    /**
+     * 모바일 작업자가 랙 QR 스캔 → 그 랙 안의 모든 location 들의 품목.
+     * master 에서 rackId → locationIds 변환 후 호출.
+     */
+    List<StockCountItem> findByCountOrderIdAndLocationIdIn(UUID countOrderId, Collection<UUID> locationIds);
 }

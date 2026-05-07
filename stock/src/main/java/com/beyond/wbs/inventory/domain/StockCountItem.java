@@ -58,10 +58,11 @@ public class StockCountItem {
     private LocalDateTime countedAt;
 
     // 실사 수량 입력
-    public void count(Integer countQty, UUID countedBy) {
+    public void count(Integer countQty, String note, UUID countedBy) {
         this.countQty = countQty;
         this.diffQty = countQty - this.systemQty;
         this.status = StockCountItemStatus.counted;
+        this.note = note;
         this.countedBy = countedBy;
         this.countedAt = LocalDateTime.now();
     }

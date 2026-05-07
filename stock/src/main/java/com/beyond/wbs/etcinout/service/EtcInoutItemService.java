@@ -1,8 +1,11 @@
 package com.beyond.wbs.etcinout.service;
 
 import com.beyond.wbs.common.client.MasterServiceClient;
+import com.beyond.wbs.common.client.dto.LocationPageResDto;
 import com.beyond.wbs.common.client.dto.LocationResDto;
 import com.beyond.wbs.common.client.dto.ProductResDto;
+import com.beyond.wbs.common.client.dto.RackResDto;
+import com.beyond.wbs.common.client.dto.ZoneResDto;
 import com.beyond.wbs.etcinout.domain.*;
 import com.beyond.wbs.etcinout.dto.EtcInoutItemDto;
 import com.beyond.wbs.etcinout.dto.EtcInoutItemResDto;
@@ -68,6 +71,11 @@ public class EtcInoutItemService {
         Map<UUID, String> productNameCache = new HashMap<>();
         Map<UUID, LocationResDto> locationCache = new HashMap<>();
 
+        // 입고일 때만 창고의 DEFECT zone 첫 위치를 default 로 한 번 조회 → 모든 items 에 동일하게 박음
+        LocationResDto defectLocation = order.getDirection() == Direction.in
+                ? fetchDefaultDefectLocation(order.getWarehouseId(), clientId)
+                : null;
+
         List<EtcInoutItemResDto> result = new ArrayList<>();
         for (EtcInoutOrderItem item : items) {
             String productName = productNameCache.computeIfAbsent(
@@ -75,9 +83,37 @@ public class EtcInoutItemService {
             LocationResDto location = item.getLocationId() == null ? null
                     : locationCache.computeIfAbsent(item.getLocationId(),
                             id -> fetchLocation(id, clientId));
-            result.add(EtcInoutItemResDto.fromEntity(item, productName, location));
+            result.add(EtcInoutItemResDto.fromEntity(item, productName, location, defectLocation));
         }
         return result;
+    }
+
+    // 창고의 DEFECT zone → 첫 rack → 첫 location 한 번만 조회.
+    // 모든 입고 items 에 default 로 박아 작업자가 불량 발견 시 안내용으로 표시.
+    private LocationResDto fetchDefaultDefectLocation(UUID warehouseId, UUID clientId) {
+        if (warehouseId == null || clientId == null) return null;
+        try {
+            String clientIdStr = clientId.toString();
+            List<ZoneResDto> defectZones = masterServiceClient
+                    .getZonesByWarehouseIdAndType(warehouseId, "DEFECT", clientIdStr);
+            if (defectZones == null || defectZones.isEmpty()) return null;
+
+            for (ZoneResDto zone : defectZones) {
+                List<RackResDto> racks = masterServiceClient.getRacksByZoneId(zone.getId(), clientIdStr);
+                if (racks == null || racks.isEmpty()) continue;
+                for (RackResDto rack : racks) {
+                    LocationPageResDto page = masterServiceClient
+                            .getLocationsByRackId(rack.getId(), clientIdStr);
+                    if (page != null && page.getContent() != null && !page.getContent().isEmpty()) {
+                        return page.getContent().get(0);
+                    }
+                }
+            }
+            return null;
+        } catch (Exception e) {
+            log.warn("[Feign] 불량 default 위치 조회 실패: warehouseId={} - {}", warehouseId, e.getMessage());
+            return null;
+        }
     }
 
     // 품목 추가 (draft 상태만)

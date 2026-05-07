@@ -33,15 +33,16 @@ public class MobileStockCountController {
 
     private final StockCountService stockCountService;
 
-    // 본인 회사의 진행 중 실사지시서 목록 (창고 필터 옵셔널)
+    // 본인 작업 이력 + 진행 중 실사지시서 목록 (창고 필터 옵셔널)
     @CheckPermission(resource = Resource.STOCK_COUNT, action = Action.READ)
     @GetMapping("/my-list")
     public ResponseEntity<List<StockCountResDto>> myList(
             @RequestHeader("X-Client-Id") String clientId,
+            @RequestHeader("X-User-Id") String userId,
             @RequestParam(required = false) UUID warehouseId) {
 
-        List<StockCountResDto> result = stockCountService.findInProgressForMobile(
-                UUID.fromString(clientId), warehouseId);
+        List<StockCountResDto> result = stockCountService.findMyListForMobile(
+                UUID.fromString(clientId), UUID.fromString(userId), warehouseId);
         return ResponseEntity.ok(result);
     }
 
@@ -77,6 +78,19 @@ public class MobileStockCountController {
 
         List<StockCountItemResDto> result = stockCountService.findItemsByLocation(
                 id, locationId, UUID.fromString(clientId));
+        return ResponseEntity.ok(result);
+    }
+
+    // 랙 QR 스캔 시 — 그 랙(여러 floor 포함) 의 모든 품목들
+    @CheckPermission(resource = Resource.STOCK_COUNT, action = Action.READ)
+    @GetMapping("/{id}/items/by-rack/{rackId}")
+    public ResponseEntity<List<StockCountItemResDto>> itemsByRack(
+            @RequestHeader("X-Client-Id") String clientId,
+            @PathVariable UUID id,
+            @PathVariable UUID rackId) {
+
+        List<StockCountItemResDto> result = stockCountService.findItemsByRack(
+                id, rackId, UUID.fromString(clientId));
         return ResponseEntity.ok(result);
     }
 

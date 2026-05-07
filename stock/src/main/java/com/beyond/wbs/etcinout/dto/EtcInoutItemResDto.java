@@ -29,6 +29,14 @@ public class EtcInoutItemResDto {
     private String zoneCode;
     private String zoneName;
 
+    // 입고 시 불량 발견 시 적치할 default 위치 (창고의 DEFECT zone 첫 위치).
+    // direction=in 인 etc-inout 의 items 응답에만 채워짐.
+    // 작업자가 process 시 다른 위치로 변경 가능.
+    private UUID defectLocationId;
+    private String defectLocationCode;
+    private UUID defectRackId;
+    private String defectRackCode;
+
     private Integer qty;
     private Integer processedQty;
     private Integer defectQty;
@@ -42,12 +50,19 @@ public class EtcInoutItemResDto {
     private LocalDateTime processedAt;
 
     public static EtcInoutItemResDto fromEntity(EtcInoutOrderItem item, String productName) {
-        return fromEntity(item, productName, null);
+        return fromEntity(item, productName, null, null);
     }
 
     public static EtcInoutItemResDto fromEntity(EtcInoutOrderItem item,
                                                  String productName,
                                                  LocationResDto location) {
+        return fromEntity(item, productName, location, null);
+    }
+
+    public static EtcInoutItemResDto fromEntity(EtcInoutOrderItem item,
+                                                 String productName,
+                                                 LocationResDto location,
+                                                 LocationResDto defectLocation) {
         return EtcInoutItemResDto.builder()
                 .id(item.getId())
                 .productId(item.getProductId())
@@ -60,6 +75,10 @@ public class EtcInoutItemResDto {
                 .zoneId(location != null ? location.getZoneId() : null)
                 .zoneCode(location != null ? location.getZoneCode() : null)
                 .zoneName(location != null ? location.getZoneName() : null)
+                .defectLocationId(defectLocation != null ? defectLocation.getId() : null)
+                .defectLocationCode(defectLocation != null ? defectLocation.getCode() : null)
+                .defectRackId(defectLocation != null ? defectLocation.getRackId() : null)
+                .defectRackCode(defectLocation != null ? defectLocation.getRackCode() : null)
                 .qty(item.getQty())
                 .processedQty(item.getProcessedQty())
                 .defectQty(item.getDefectQty())

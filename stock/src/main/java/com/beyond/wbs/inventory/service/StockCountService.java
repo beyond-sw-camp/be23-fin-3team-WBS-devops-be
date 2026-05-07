@@ -2,6 +2,7 @@ package com.beyond.wbs.inventory.service;
 
 import com.beyond.wbs.code.NumberingUtil;
 import com.beyond.wbs.common.client.MasterServiceClient;
+import com.beyond.wbs.common.client.dto.LocationPageResDto;
 import com.beyond.wbs.common.client.dto.LocationResDto;
 import com.beyond.wbs.common.client.dto.ProductResDto;
 import com.beyond.wbs.document.instruction.domain.InstructionDocumentType;
@@ -224,7 +225,7 @@ public class StockCountService {
             throw new IllegalArgumentException("해당 실사지시서의 품목이 아닙니다.");
         }
 
-        item.count(dto.getCountQty(), userId);
+        item.count(dto.getCountQty(), dto.getNote(), userId);
         countItemRepository.save(item);
 
         // 같은 회사 관리자에게 품목 실사 알림 push (상세만 — 진행률 갱신용)
@@ -375,11 +376,13 @@ public class StockCountService {
     }
 
     /**
-     * 모바일 작업자용 — in_progress 상태의 실사지시서 list. warehouseId 옵셔널.
+     * 모바일 작업자용 — 본인 작업 이력 + 진행 중 실사 모두 반환.
+     * - in_progress: 누구나 진입 가능 (작업자가 새 실사 시작용)
+     * - completed/cancelled: 본인이 countedBy 로 입력한 적 있는 것만 (작업 이력 회상용)
      */
     @Transactional(readOnly = true)
-    public List<StockCountResDto> findInProgressForMobile(UUID clientId, UUID warehouseId) {
-        return countOrderRepository.findInProgressForMobile(clientId, warehouseId).stream()
+    public List<StockCountResDto> findMyListForMobile(UUID clientId, UUID userId, UUID warehouseId) {
+        return countOrderRepository.findMyListForMobile(clientId, userId, warehouseId).stream()
                 .map(StockCountResDto::from)
                 .collect(Collectors.toList());
     }
@@ -391,6 +394,35 @@ public class StockCountService {
     public List<StockCountItemResDto> findItemsByLocation(UUID orderId, UUID locationId, UUID clientId) {
         getOrderWithCheck(orderId, clientId); // 회사 소속 검증
         List<StockCountItemResDto> dtos = countItemRepository.findByCountOrderIdAndLocationId(orderId, locationId).stream()
+                .map(StockCountItemResDto::from)
+                .collect(Collectors.toList());
+        return enrichItems(dtos, clientId);
+    }
+
+    /**
+     * 모바일 작업자가 랙 QR 스캔 시 — 해당 랙(여러 floor 포함) 의 품목들.
+     * master 에서 rackId → locationIds 조회 후 그 locations 로 필터링.
+     */
+    @Transactional(readOnly = true)
+    public List<StockCountItemResDto> findItemsByRack(UUID orderId, UUID rackId, UUID clientId) {
+        getOrderWithCheck(orderId, clientId);
+
+        List<UUID> locationIds;
+        try {
+            LocationPageResDto page = masterServiceClient.getLocationsByRackId(rackId, clientId.toString());
+            locationIds = (page == null || page.getContent() == null) ? List.of()
+                    : page.getContent().stream()
+                        .map(LocationResDto::getId)
+                        .filter(java.util.Objects::nonNull)
+                        .collect(Collectors.toList());
+        } catch (Exception e) {
+            log.warn("[StockCount] rack 조회 실패 rackId={} - {}", rackId, e.getMessage());
+            return List.of();
+        }
+        if (locationIds.isEmpty()) return List.of();
+
+        List<StockCountItem> items = countItemRepository.findByCountOrderIdAndLocationIdIn(orderId, locationIds);
+        List<StockCountItemResDto> dtos = items.stream()
                 .map(StockCountItemResDto::from)
                 .collect(Collectors.toList());
         return enrichItems(dtos, clientId);
