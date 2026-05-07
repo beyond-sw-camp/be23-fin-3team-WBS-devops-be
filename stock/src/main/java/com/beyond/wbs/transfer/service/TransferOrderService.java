@@ -63,7 +63,6 @@ public class TransferOrderService {
     private final MasterServiceClient masterServiceClient;
     private final WebSocketPublisher webSocketPublisher;
     private final ApplicationEventPublisher applicationEventPublisher;
-    private final TransferEventPublisher transferEventPublisher;
     private final WorkAssignmentService workAssignmentService;
 
     public TransferOrderService(TransferOrderRepository transferOrderRepository,
@@ -75,7 +74,6 @@ public class TransferOrderService {
                                  MasterServiceClient masterServiceClient,
                                  WebSocketPublisher webSocketPublisher,
                                  ApplicationEventPublisher applicationEventPublisher,
-                                 TransferEventPublisher transferEventPublisher,
                                  WorkAssignmentService workAssignmentService) {
         this.transferOrderRepository = transferOrderRepository;
         this.transferOrderItemRepository = transferOrderItemRepository;
@@ -86,7 +84,6 @@ public class TransferOrderService {
         this.masterServiceClient = masterServiceClient;
         this.webSocketPublisher = webSocketPublisher;
         this.applicationEventPublisher = applicationEventPublisher;
-        this.transferEventPublisher = transferEventPublisher;
         this.workAssignmentService = workAssignmentService;
     }
 
