@@ -130,8 +130,9 @@ public class OutboundOrders {
     }
 
     // 출고지시서 승인
-    public void approve(UUID approvedBy) {
+    public void approve(UUID approvedBy, UUID assignedTo) {
         this.approvedBy = approvedBy;
+        this.assignedTo = assignedTo;
         this.status = OutboundOrderStatus.approved;
         this.approvedAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();

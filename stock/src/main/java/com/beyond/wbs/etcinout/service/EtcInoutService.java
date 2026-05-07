@@ -416,7 +416,7 @@ public class EtcInoutService {
             }
         }
 
-        UUID assignedWorker = etcInoutAssignmentStrategy.assign();
+        UUID assignedWorker = etcInoutAssignmentStrategy.assign(clientId, userId);
         order.approve(userId, assignedWorker);
 
         notifyEtcInout("APPROVED", order, userId, true);

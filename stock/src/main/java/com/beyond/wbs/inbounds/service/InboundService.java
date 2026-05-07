@@ -7,6 +7,8 @@ import com.beyond.wbs.common.client.dto.ProductResDto;
 import com.beyond.wbs.common.client.dto.RackResDto;
 import com.beyond.wbs.common.client.dto.SupplierResDto;
 import com.beyond.wbs.common.client.dto.WarehouseResDto;
+import com.beyond.wbs.assignment.WorkAssignmentService;
+import com.beyond.wbs.assignment.WorkTaskType;
 import com.beyond.wbs.inbounds.domain.*;
 import com.beyond.wbs.inbounds.dto.*;
 import com.beyond.wbs.code.NumberingUtil;
@@ -74,6 +76,7 @@ public class InboundService {
     private final PlacementSuggestionService placementSuggestionService;
     private final WebSocketPublisher webSocketPublisher;
     private final ApplicationEventPublisher applicationEventPublisher;
+    private final WorkAssignmentService workAssignmentService;
 
     public InboundService(ErpPurchaseOrderRepository erpPurchaseOrderRepository,
                           ErpPurchaseOrderItemRepository erpPurchaseOrderItemRepository,
@@ -94,7 +97,8 @@ public class InboundService {
                           InventoryService inventoryService,
                           PlacementSuggestionService placementSuggestionService,
                           ApplicationEventPublisher applicationEventPublisher,
-                          WebSocketPublisher webSocketPublisher) {
+                          WebSocketPublisher webSocketPublisher,
+                          WorkAssignmentService workAssignmentService) {
         this.erpPurchaseOrderRepository = erpPurchaseOrderRepository;
         this.erpPurchaseOrderItemRepository = erpPurchaseOrderItemRepository;
         this.inboundOrderRepository = inboundOrderRepository;
@@ -115,6 +119,7 @@ public class InboundService {
         this.placementSuggestionService = placementSuggestionService;
         this.applicationEventPublisher = applicationEventPublisher;
         this.webSocketPublisher = webSocketPublisher;
+        this.workAssignmentService = workAssignmentService;
     }
 
     /**
@@ -1399,7 +1404,8 @@ public class InboundService {
         }
 
         // 4. 승인 처리
-        order.approve(userId);
+        UUID assignedTo = workAssignmentService.assign(WorkTaskType.INBOUND_INSPECTION, clientId, userId);
+        order.approve(userId, assignedTo);
 
         // 5. Elasticsearch 색인 갱신
         inboundOrderSearchService.index(order.getId());

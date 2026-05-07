@@ -57,6 +57,10 @@ public class TransferOrder {
     @Column(name = "approved_by", columnDefinition = "BINARY(16)")
     private UUID approvedBy;
 
+    // Account Service 참조 (이동 담당자)
+    @Column(name = "assigned_to", columnDefinition = "BINARY(16)")
+    private UUID assignedTo;
+
     // 승인 일시
     @Column(name = "approved_at")
     private LocalDateTime approvedAt;
@@ -74,9 +78,10 @@ public class TransferOrder {
     // === 상태 전환 메서드 ===
 
     // 승인: draft → approved
-    public void approve(UUID approverId) {
+    public void approve(UUID approverId, UUID assignedTo) {
         this.status = TransferOrderStatus.approved;
         this.approvedBy = approverId;
+        this.assignedTo = assignedTo;
         this.approvedAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
     }

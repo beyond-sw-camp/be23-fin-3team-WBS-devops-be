@@ -13,5 +13,5 @@ import java.util.UUID;
  */
 public interface EtcInoutAssignmentStrategy {
 
-    UUID assign();
+    UUID assign(UUID clientId, UUID requesterId);
 }

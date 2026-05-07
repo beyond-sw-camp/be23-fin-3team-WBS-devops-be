@@ -52,6 +52,10 @@ public class InboundOrders {
     @Column(name = "approved_by", columnDefinition = "BINARY(16)")
     private UUID approvedBy;
 
+    // Account Service 참조 (입고 검수 담당자)
+    @Column(name = "assigned_to", columnDefinition = "BINARY(16)")
+    private UUID assignedTo;
+
     // 지시서 번호 (자동채번)
     @Column(name = "order_no", nullable = false, length = 30)
     private String orderNo;
@@ -146,9 +150,10 @@ public class InboundOrders {
     }
 
     // 승인 처리 (draft → approved)
-    public void approve(UUID approvedBy) {
+    public void approve(UUID approvedBy, UUID assignedTo) {
         this.status = InboundOrderStatus.approved;
         this.approvedBy = approvedBy;
+        this.assignedTo = assignedTo;
         this.approvedAt = LocalDateTime.now();
         this.updatedAt = LocalDateTime.now();
     }

@@ -112,7 +112,7 @@ public class RagResponseCacheService {
                     question TEXT NOT NULL UNIQUE,
                     answer TEXT NOT NULL,
                     source VARCHAR(100),
-                    embedding VECTOR(1024) NOT NULL,
+                    embedding VECTOR(1536) NOT NULL,
                     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                     last_used_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                     hit_count INTEGER NOT NULL DEFAULT 0

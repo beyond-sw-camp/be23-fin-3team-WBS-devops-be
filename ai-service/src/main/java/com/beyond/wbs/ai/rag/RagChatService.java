@@ -1,11 +1,10 @@
 package com.beyond.wbs.ai.rag;
 
+import com.beyond.wbs.ai.openai.OpenAiChatGateway;
 import com.beyond.wbs.ai.chat.dto.ChatTurn;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
-import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
@@ -13,13 +12,14 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
 import java.util.List;
+import java.util.Optional;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class RagChatService {
 
-    private final ChatClient chatClient;
+    private final OpenAiChatGateway openAiChatGateway;
     private final VectorStore vectorStore;
     private final RagResponseCacheService responseCacheService;
 
@@ -32,9 +32,10 @@ public class RagChatService {
             1. 반드시 한국어로 답한다.
             2. 문서 내용을 그대로 복사하지 말고, 사용자의 상황에 맞게 정리해서 답한다.
             3. 최근 대화 맥락이 있으면 현재 질문과 함께 해석한다.
-            4. 근거가 있는 문장에는 "(출처: <섹션 경로>)" 를 붙인다. 출처는 CONTEXT 의 "[섹션: ...]" 값만 쓴다.
-            5. CONTEXT 에 없으면 추측하지 말고 "제공된 문서에 해당 내용이 없습니다" 라고 답한다.
+            4. 사용자에게 "RAG", "CONTEXT", "출처" 같은 내부 용어를 노출하지 않는다.
+            5. CONTEXT 에 없으면 추측하지 말고 "죄송합니다. 요청하신 질문을 처리할 수 없습니다." 라고 답한다.
             6. 답변은 5줄 이내로 간결하게 작성한다.
+            7. markdown, 번호 목록, 불릿, 굵게 표시를 쓰지 말고 자연스러운 문장으로 답한다.
             """;
 
     public String ask(String question, String category) {
@@ -48,34 +49,29 @@ public class RagChatService {
         log.info("[AI_RAG_START] category={}, requestedCategory={}, originalQuestion='{}', retrievalQuestion='{}'",
                 effectiveCategory, normalizeCategory(category), sanitize(question), sanitize(retrievalQuestion));
         String cacheSource = effectiveCategory;
-        var cached = responseCacheService.findSimilar(retrievalQuestion, cacheSource);
+        var cached = findSimilarQuietly(retrievalQuestion, cacheSource);
         if (cached.isPresent()) {
             RagResponseCacheService.CachedAnswer answer = cached.get();
-            responseCacheService.markHit(answer.question());
+            markCacheHitQuietly(answer.question());
             log.info("[AI_RAG_CACHE_HIT] similarity={}, source={}, elapsedMs={}, question='{}'",
                     String.format("%.4f", answer.similarity()), answer.source(), elapsedMs(startedAt), sanitize(retrievalQuestion));
-            return answer.answer() + "\n\n(유사 질문 캐시 사용, 유사도 "
-                    + String.format("%.2f", answer.similarity()) + ")";
+            return answer.answer();
         }
 
-        SearchRequest searchRequest = buildSearchRequest(effectiveCategory);
+        SearchRequest searchRequest = buildSearchRequest(retrievalQuestion, effectiveCategory);
         long searchStartedAt = System.nanoTime();
         List<Document> documents = vectorStore.similaritySearch(searchRequest);
         logRetrieval(effectiveCategory, retrievalQuestion, documents, elapsedMs(searchStartedAt));
 
         long llmStartedAt = System.nanoTime();
-        return chatClient.prompt()
-                .system(buildSystemPrompt(history))
-                .user(retrievalQuestion)
-                .advisors(buildAdvisor(searchRequest))
-                .call()
-                .content()
-                .transform(answer -> {
-                    log.info("[AI_RAG_LLM_END] answerChars={}, llmMs={}, totalMs={}, question='{}'",
-                            answer == null ? 0 : answer.length(), elapsedMs(llmStartedAt), elapsedMs(startedAt), sanitize(retrievalQuestion));
-                    responseCacheService.save(retrievalQuestion, answer, cacheSource);
-                    return answer;
-                });
+        String answer = openAiChatGateway.complete(
+                buildSystemPrompt(history),
+                buildRagUserPrompt(retrievalQuestion, documents)
+        );
+        log.info("[AI_RAG_LLM_END] answerChars={}, llmMs={}, totalMs={}, question='{}'",
+                answer == null ? 0 : answer.length(), elapsedMs(llmStartedAt), elapsedMs(startedAt), sanitize(retrievalQuestion));
+        saveCacheQuietly(retrievalQuestion, answer, cacheSource);
+        return answer;
     }
 
     public Flux<String> askStream(String question, String category) {
@@ -89,34 +85,28 @@ public class RagChatService {
         log.info("[AI_RAG_STREAM_START] category={}, requestedCategory={}, originalQuestion='{}', retrievalQuestion='{}'",
                 effectiveCategory, normalizeCategory(category), sanitize(question), sanitize(retrievalQuestion));
         String cacheSource = effectiveCategory;
-        var cached = responseCacheService.findSimilar(retrievalQuestion, cacheSource);
+        var cached = findSimilarQuietly(retrievalQuestion, cacheSource);
         if (cached.isPresent()) {
             RagResponseCacheService.CachedAnswer answer = cached.get();
-            responseCacheService.markHit(answer.question());
+            markCacheHitQuietly(answer.question());
             log.info("[AI_RAG_CACHE_HIT] stream=true, similarity={}, source={}, elapsedMs={}, question='{}'",
                     String.format("%.4f", answer.similarity()), answer.source(), elapsedMs(startedAt), sanitize(retrievalQuestion));
-            return Flux.just(answer.answer() + "\n\n(유사 질문 캐시 사용, 유사도 "
-                    + String.format("%.2f", answer.similarity()) + ")");
+            return Flux.just(answer.answer());
         }
 
-        SearchRequest searchRequest = buildSearchRequest(effectiveCategory);
+        SearchRequest searchRequest = buildSearchRequest(retrievalQuestion, effectiveCategory);
         long searchStartedAt = System.nanoTime();
         List<Document> documents = vectorStore.similaritySearch(searchRequest);
         logRetrieval(effectiveCategory, retrievalQuestion, documents, elapsedMs(searchStartedAt));
 
-        StringBuilder answerBuffer = new StringBuilder();
-        return chatClient.prompt()
-                .system(buildSystemPrompt(history))
-                .user(retrievalQuestion)
-                .advisors(buildAdvisor(searchRequest))
-                .stream()
-                .content()
-                .doOnNext(answerBuffer::append)
-                .doOnComplete(() -> {
-                    log.info("[AI_RAG_LLM_END] stream=true, answerChars={}, totalMs={}, question='{}'",
-                            answerBuffer.length(), elapsedMs(startedAt), sanitize(retrievalQuestion));
-                    responseCacheService.save(retrievalQuestion, answerBuffer.toString(), cacheSource);
-                });
+        String answer = openAiChatGateway.complete(
+                buildSystemPrompt(history),
+                buildRagUserPrompt(retrievalQuestion, documents)
+        );
+        log.info("[AI_RAG_LLM_END] stream=true, answerChars={}, totalMs={}, question='{}'",
+                answer == null ? 0 : answer.length(), elapsedMs(startedAt), sanitize(retrievalQuestion));
+        saveCacheQuietly(retrievalQuestion, answer, cacheSource);
+        return Flux.just(answer);
     }
 
     private String buildSystemPrompt(List<ChatTurn> history) {
@@ -133,22 +123,18 @@ public class RagChatService {
         }
         String historyBlock = formatHistory(history);
         try {
-            return chatClient.prompt()
-                    .system("""
-                            너는 RAG 검색용 질문 재작성기다.
-                            최근 대화와 현재 질문을 보고, 문서 검색에 적합한 독립형 한국어 질문 1문장으로 다시 써라.
-                            - 이미 독립형이면 거의 그대로 둔다.
-                            - 설명, 인사, 따옴표 없이 질문 문장만 출력한다.
-                            """)
-                    .user("""
-                            최근 대화:
-                            %s
+            return openAiChatGateway.complete("""
+                    너는 RAG 검색용 질문 재작성기다.
+                    최근 대화와 현재 질문을 보고, 문서 검색에 적합한 독립형 한국어 질문 1문장으로 다시 써라.
+                    - 이미 독립형이면 거의 그대로 둔다.
+                    - 설명, 인사, 따옴표 없이 질문 문장만 출력한다.
+                    """, """
+                    최근 대화:
+                    %s
 
-                            현재 질문:
-                            %s
-                            """.formatted(historyBlock, question))
-                    .call()
-                    .content();
+                    현재 질문:
+                    %s
+                    """.formatted(historyBlock, question));
         } catch (Exception e) {
             log.warn("rag question rewrite failed, fallback to original question: {}", e.getMessage());
             return question;
@@ -173,8 +159,9 @@ public class RagChatService {
         return sb.toString().trim();
     }
 
-    private SearchRequest buildSearchRequest(String category) {
+    private SearchRequest buildSearchRequest(String question, String category) {
         SearchRequest.Builder searchBuilder = SearchRequest.builder()
+                .query(question)
                 .topK(4)                    // 상위 4개 청크 검색
                 .similarityThreshold(0.3);  // bge-m3 한국어 기준, 너무 높으면 드롭됨
 
@@ -187,10 +174,23 @@ public class RagChatService {
         return searchBuilder.build();
     }
 
-    private QuestionAnswerAdvisor buildAdvisor(SearchRequest searchRequest) {
-        return QuestionAnswerAdvisor.builder(vectorStore)
-                .searchRequest(searchRequest)
-                .build();
+    private String buildRagUserPrompt(String question, List<Document> documents) {
+        StringBuilder context = new StringBuilder();
+        for (int i = 0; i < documents.size(); i++) {
+            Document document = documents.get(i);
+            context.append("[문서 ").append(i + 1).append("]\n")
+                    .append(document.getText() == null ? "" : document.getText())
+                    .append("\n\n");
+        }
+        return """
+                사용자 질문:
+                %s
+
+                CONTEXT:
+                %s
+
+                위 CONTEXT만 근거로 답변:
+                """.formatted(question, context);
     }
 
     private String normalizeCategory(String category) {
@@ -215,10 +215,39 @@ public class RagChatService {
         if (hasAny(q, "화면", "어디서", "메뉴", "경로", "조회 화면", "리스트", "지시서 화면")) {
             return "wms-ui-guide";
         }
-        if (hasAny(q, "절차", "순서", "프로세스", "뭐부터", "처리해야", "해야 해", "하면 돼", "대응")) {
+        if (hasAny(q, "절차", "순서", "프로세스", "뭐부터", "처리해야", "해야 해", "하면 돼", "대응",
+                "방법", "어떻게", "알려줘", "피킹", "패킹", "검수", "적치")) {
             return "wms-work-procedures";
         }
         return "RAG";
+    }
+
+    private Optional<RagResponseCacheService.CachedAnswer> findSimilarQuietly(String question, String source) {
+        try {
+            return responseCacheService.findSimilar(question, source);
+        } catch (Exception e) {
+            log.warn("[AI_RAG_CACHE_SKIP] action=findSimilar, reason={}, question='{}'",
+                    e.getMessage(), sanitize(question));
+            return Optional.empty();
+        }
+    }
+
+    private void markCacheHitQuietly(String question) {
+        try {
+            responseCacheService.markHit(question);
+        } catch (Exception e) {
+            log.warn("[AI_RAG_CACHE_SKIP] action=markHit, reason={}, question='{}'",
+                    e.getMessage(), sanitize(question));
+        }
+    }
+
+    private void saveCacheQuietly(String question, String answer, String source) {
+        try {
+            responseCacheService.save(question, answer, source);
+        } catch (Exception e) {
+            log.warn("[AI_RAG_CACHE_SKIP] action=save, reason={}, question='{}'",
+                    e.getMessage(), sanitize(question));
+        }
     }
 
     private boolean hasAny(String value, String... keywords) {

@@ -1,5 +1,7 @@
 package com.beyond.wbs.outbounds.service;
 
+import com.beyond.wbs.assignment.WorkAssignmentService;
+import com.beyond.wbs.assignment.WorkTaskType;
 import com.beyond.wbs.common.client.AccountServiceClient;
 import com.beyond.wbs.common.client.MasterServiceClient;
 import com.beyond.wbs.common.client.dto.*;
@@ -62,6 +64,7 @@ public class OutboundService {
     private final OutboundPreviewService outboundPreviewService;
     private final InboundOrderRepository inboundOrderRepository;
     private final InboundOrderItemRepository inboundOrderItemRepository;
+    private final WorkAssignmentService workAssignmentService;
 
     @Autowired
     public OutboundService(OutboundOrderRepository outboundOrderRepository,
@@ -82,7 +85,8 @@ public class OutboundService {
                            OutboundPreviewService outboundPreviewService,
                            WebSocketPublisher webSocketPublisher,
                            InboundOrderRepository inboundOrderRepository,
-                           InboundOrderItemRepository inboundOrderItemRepository) {
+                           InboundOrderItemRepository inboundOrderItemRepository,
+                           WorkAssignmentService workAssignmentService) {
         this.outboundOrderRepository = outboundOrderRepository;
         this.erpSalesOrdersRepository = erpSalesOrdersRepository;
         this.erpSalesOrderItemRepository = erpSalesOrderItemRepository;
@@ -102,6 +106,7 @@ public class OutboundService {
         this.webSocketPublisher = webSocketPublisher;
         this.inboundOrderRepository = inboundOrderRepository;
         this.inboundOrderItemRepository = inboundOrderItemRepository;
+        this.workAssignmentService = workAssignmentService;
     }
 
     // ============================================================
@@ -603,7 +608,8 @@ public class OutboundService {
                             + String.join("\n - ", shortageMessages));
         }
 
-        outboundOrders.approve(userId);
+        UUID assignedTo = workAssignmentService.assign(WorkTaskType.OUTBOUND_DISPATCH, clientId, userId);
+        outboundOrders.approve(userId, assignedTo);
         outboundOrderRepository.save(outboundOrders);
 
         // Kafka 이벤트 발행 (가용재고 감소·예약재고 증가)

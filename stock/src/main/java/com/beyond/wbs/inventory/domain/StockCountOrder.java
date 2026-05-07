@@ -45,6 +45,10 @@ public class StockCountOrder {
     @Column(name = "approved_by", columnDefinition = "BINARY(16)")
     private UUID approvedBy;
 
+    // 실사 담당자
+    @Column(name = "assigned_to", columnDefinition = "BINARY(16)")
+    private UUID assignedTo;
+
     // 비고
     @Column(columnDefinition = "TEXT")
     private String note;
@@ -62,9 +66,10 @@ public class StockCountOrder {
     private LocalDateTime completedAt;
 
     // 실사 시작 (draft → in_progress)
-    public void start(UUID approvedBy) {
+    public void start(UUID approvedBy, UUID assignedTo) {
         this.status = StockCountStatus.in_progress;
         this.approvedBy = approvedBy;
+        this.assignedTo = assignedTo;
         this.approvedAt = LocalDateTime.now();
     }
 

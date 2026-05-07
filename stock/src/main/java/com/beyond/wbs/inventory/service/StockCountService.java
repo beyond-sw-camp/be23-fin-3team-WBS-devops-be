@@ -1,5 +1,7 @@
 package com.beyond.wbs.inventory.service;
 
+import com.beyond.wbs.assignment.WorkAssignmentService;
+import com.beyond.wbs.assignment.WorkTaskType;
 import com.beyond.wbs.code.NumberingUtil;
 import com.beyond.wbs.common.client.MasterServiceClient;
 import com.beyond.wbs.common.client.dto.LocationPageResDto;
@@ -46,6 +48,7 @@ public class StockCountService {
     private final ApplicationEventPublisher applicationEventPublisher;
     private final WebSocketPublisher webSocketPublisher;
     private final MasterServiceClient masterServiceClient;
+    private final WorkAssignmentService workAssignmentService;
 
     // WS 알림: 모듈 공통 형식 (clientId 기반 multi-tenant 분리)
     private void notifyStockCount(String type, StockCountOrder order, UUID actorId) {
@@ -180,7 +183,8 @@ public class StockCountService {
             throw new IllegalStateException("초안 상태에서만 실사를 시작할 수 있습니다.");
         }
 
-        order.start(userId);
+        UUID assignedTo = workAssignmentService.assign(WorkTaskType.STOCK_COUNT, clientId, userId);
+        order.start(userId, assignedTo);
         countOrderRepository.save(order);
 
         // 실사지시서 PDF 발행 요청 — 시작 시점 = 발행

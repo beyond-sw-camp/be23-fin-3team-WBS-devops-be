@@ -1,5 +1,7 @@
 package com.beyond.wbs.transfer.service;
 
+import com.beyond.wbs.assignment.WorkAssignmentService;
+import com.beyond.wbs.assignment.WorkTaskType;
 import com.beyond.wbs.code.NumberingUtil;
 import com.beyond.wbs.common.client.MasterServiceClient;
 import com.beyond.wbs.common.client.dto.LocationResDto;
@@ -61,6 +63,8 @@ public class TransferOrderService {
     private final MasterServiceClient masterServiceClient;
     private final WebSocketPublisher webSocketPublisher;
     private final ApplicationEventPublisher applicationEventPublisher;
+    private final TransferEventPublisher transferEventPublisher;
+    private final WorkAssignmentService workAssignmentService;
 
     public TransferOrderService(TransferOrderRepository transferOrderRepository,
                                  TransferOrderItemRepository transferOrderItemRepository,
@@ -70,7 +74,9 @@ public class TransferOrderService {
                                  InventoryService inventoryService,
                                  MasterServiceClient masterServiceClient,
                                  WebSocketPublisher webSocketPublisher,
-                                 ApplicationEventPublisher applicationEventPublisher) {
+                                 ApplicationEventPublisher applicationEventPublisher,
+                                 TransferEventPublisher transferEventPublisher,
+                                 WorkAssignmentService workAssignmentService) {
         this.transferOrderRepository = transferOrderRepository;
         this.transferOrderItemRepository = transferOrderItemRepository;
         this.transferExecutionRepository = transferExecutionRepository;
@@ -80,6 +86,8 @@ public class TransferOrderService {
         this.masterServiceClient = masterServiceClient;
         this.webSocketPublisher = webSocketPublisher;
         this.applicationEventPublisher = applicationEventPublisher;
+        this.transferEventPublisher = transferEventPublisher;
+        this.workAssignmentService = workAssignmentService;
     }
 
     /** 창고 이름 조회 실패 시 null 반환 (전체 응답은 살려둠). */
@@ -295,7 +303,8 @@ public class TransferOrderService {
         if (order.getStatus() != TransferOrderStatus.draft) {
             throw new IllegalStateException("임시저장(draft) 상태의 지시서만 승인할 수 있습니다. 현재: " + order.getStatus());
         }
-        order.approve(approverId);
+        UUID assignedTo = workAssignmentService.assign(WorkTaskType.TRANSFER, clientId, approverId);
+        order.approve(approverId, assignedTo);
 
         // 이동지시서 PDF 발행 요청
         applicationEventPublisher.publishEvent(new InstructionIssueRequested(
