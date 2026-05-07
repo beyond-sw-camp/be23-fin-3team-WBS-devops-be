@@ -3,11 +3,20 @@ package com.beyond.wbs.statistic.service;
 import com.beyond.wbs.common.client.MasterServiceClient;
 import com.beyond.wbs.common.client.dto.ProductResDto;
 import com.beyond.wbs.common.client.dto.WarehouseLocationsResDto;
+import com.beyond.wbs.etcinout.domain.Direction;
+import com.beyond.wbs.etcinout.domain.EtcInoutOrder;
+import com.beyond.wbs.etcinout.repository.EtcInoutOrderRepository;
+import com.beyond.wbs.inbounds.domain.InboundOrders;
+import com.beyond.wbs.inbounds.repository.InboundOrderRepository;
 import com.beyond.wbs.inventory.domain.*;
 import com.beyond.wbs.inventory.repository.InventoryRepository;
 import com.beyond.wbs.inventory.repository.InventorySnapshotRepository;
 import com.beyond.wbs.inventory.repository.InventoryTransactionRepository;
+import com.beyond.wbs.outbounds.domain.OutboundOrders;
+import com.beyond.wbs.outbounds.repository.OutboundOrderRepository;
 import com.beyond.wbs.statistic.dto.*;
+import com.beyond.wbs.transfer.domain.TransferOrder;
+import com.beyond.wbs.transfer.repository.TransferOrderRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,6 +44,10 @@ public class StatisticService {
     private final InventoryTransactionRepository transactionRepository;
     private final InventoryRepository inventoryRepository;
     private final MasterServiceClient masterServiceClient;
+    private final InboundOrderRepository inboundOrderRepository;
+    private final OutboundOrderRepository outboundOrderRepository;
+    private final TransferOrderRepository transferOrderRepository;
+    private final EtcInoutOrderRepository etcInoutOrderRepository;
 
     // ============================================================
     // 1) 월별 입출고 추이
@@ -43,39 +56,44 @@ public class StatisticService {
     /**
      * 월별 입출고 추이를 조회한다.
      *
-     * InventorySnapshot 테이블에서 해당 기간의 월별 입고/출고 합계를 집계한다.
-     * 스냅샷은 (상품+창고+위치)별 row이므로 전체 합산하여 월 단위 총량을 반환한다.
+     * InventoryTransaction 테이블에서 월별 재고 흐름을 집계한다.
      *
-     * @param clientId 고객사 ID
-     * @param from     시작월 (yyyy-MM-01)
-     * @param to       종료월 (yyyy-MM-01)
+     * @param clientId    고객사 ID
+     * @param from        시작월 (yyyy-MM-01)
+     * @param to          종료월 (yyyy-MM-01)
+     * @param warehouseId 창고 필터 (nullable — null 이면 회사 전체 합계)
      */
-    public List<MonthlyInoutDto> getMonthlyInout(UUID clientId, LocalDate from, LocalDate to) {
-        List<MonthlyInoutDto> result = new ArrayList<>();
+    public List<MonthlyInoutDto> getMonthlyInout(UUID clientId, LocalDate from, LocalDate to,
+                                                  UUID warehouseId) {
+        LocalDate firstMonth = from.withDayOfMonth(1);
+        LocalDate lastMonth = to.withDayOfMonth(1);
+        LocalDateTime fromStart = firstMonth.atStartOfDay();
+        LocalDateTime toEnd = lastMonth.plusMonths(1).atStartOfDay();
 
-        LocalDate current = from.withDayOfMonth(1);
-        LocalDate end = to.withDayOfMonth(1);
+        List<InventoryTransaction> txList = transactionRepository
+                .findByDateRangeAndStatus(clientId, warehouseId, null,
+                        InventoryStatus.available, fromStart, toEnd);
 
-        while (!current.isAfter(end)) {
-            List<InventorySnapshot> snapshots = snapshotRepository
-                    .findByClientIdAndSnapshotMonth(clientId, current);
+        ReferenceLookup lookup = buildReferenceLookup(clientId, txList);
+        Map<LocalDate, StatisticFlowAccumulator> monthlyMap = new LinkedHashMap<>();
 
-            int totalInbound = 0;
-            int totalOutbound = 0;
-            for (InventorySnapshot s : snapshots) {
-                totalInbound += s.getInboundQty();
-                totalOutbound += s.getOutboundQty();
-            }
-
-            result.add(MonthlyInoutDto.builder()
-                    .month(current)
-                    .inboundQty(totalInbound)
-                    .outboundQty(totalOutbound)
-                    .build());
-
+        LocalDate current = firstMonth;
+        while (!current.isAfter(lastMonth)) {
+            monthlyMap.put(current, new StatisticFlowAccumulator());
             current = current.plusMonths(1);
         }
 
+        for (InventoryTransaction tx : txList) {
+            LocalDate monthKey = tx.getCreatedAt().toLocalDate().withDayOfMonth(1);
+            StatisticFlowAccumulator bucket = monthlyMap.get(monthKey);
+            if (bucket == null) continue;
+            accumulateFlow(bucket, tx, lookup);
+        }
+
+        List<MonthlyInoutDto> result = new ArrayList<>();
+        for (Map.Entry<LocalDate, StatisticFlowAccumulator> entry : monthlyMap.entrySet()) {
+            result.add(toMonthlyDto(entry.getKey(), entry.getValue()));
+        }
         return result;
     }
 
@@ -86,8 +104,8 @@ public class StatisticService {
     /**
      * 일별 입출고 추이를 조회한다.
      *
-     * InventoryTransaction에서 txType이 inbound/outbound인 트랜잭션을
-     * 날짜별로 집계하여 반환한다.
+     * InventoryTransaction을 날짜별로 집계하여
+     * 정상입고/반품입고/정상출고/반품출고/이동/기타입출고 흐름을 반환한다.
      * available 상태 기준으로 집계 (실제 재고에 반영된 변동만).
      *
      * @param clientId    고객사 ID
@@ -104,36 +122,252 @@ public class StatisticService {
                 .findByDateRangeAndStatus(clientId, warehouseId, null,
                         InventoryStatus.available, fromStart, toEnd);
 
-        // 날짜별 [입고, 출고] 초기화
-        Map<LocalDate, int[]> dailyMap = new LinkedHashMap<>();
+        ReferenceLookup lookup = buildReferenceLookup(clientId, txList);
+        Map<LocalDate, StatisticFlowAccumulator> dailyMap = new LinkedHashMap<>();
         LocalDate current = from;
         while (!current.isAfter(to)) {
-            dailyMap.put(current, new int[]{0, 0});
+            dailyMap.put(current, new StatisticFlowAccumulator());
             current = current.plusDays(1);
         }
 
         for (InventoryTransaction tx : txList) {
             LocalDate txDate = tx.getCreatedAt().toLocalDate();
             if (!dailyMap.containsKey(txDate)) continue;
-
-            int[] dayData = dailyMap.get(txDate);
-            if (tx.getQty() > 0) {
-                dayData[0] += tx.getQty();
-            } else {
-                dayData[1] += Math.abs(tx.getQty());
-            }
+            accumulateFlow(dailyMap.get(txDate), tx, lookup);
         }
 
         List<DailyInoutDto> result = new ArrayList<>();
-        for (Map.Entry<LocalDate, int[]> entry : dailyMap.entrySet()) {
-            result.add(DailyInoutDto.builder()
-                    .date(entry.getKey())
-                    .inboundQty(entry.getValue()[0])
-                    .outboundQty(entry.getValue()[1])
-                    .build());
+        for (Map.Entry<LocalDate, StatisticFlowAccumulator> entry : dailyMap.entrySet()) {
+            result.add(toDailyDto(entry.getKey(), entry.getValue(), lookup.products()));
         }
 
         return result;
+    }
+
+    private ReferenceLookup buildReferenceLookup(UUID clientId, List<InventoryTransaction> txList) {
+        Set<UUID> inboundIds = new LinkedHashSet<>();
+        Set<UUID> outboundIds = new LinkedHashSet<>();
+        Set<UUID> transferIds = new LinkedHashSet<>();
+        Set<UUID> etcIds = new LinkedHashSet<>();
+        Set<UUID> productIds = new LinkedHashSet<>();
+
+        for (InventoryTransaction tx : txList) {
+            if (tx.getProductId() != null) {
+                productIds.add(tx.getProductId());
+            }
+            if (tx.getRefId() == null || tx.getRefType() == null) continue;
+            switch (tx.getRefType()) {
+                case inbound_order -> inboundIds.add(tx.getRefId());
+                case outbound_order -> outboundIds.add(tx.getRefId());
+                case transfer_order -> transferIds.add(tx.getRefId());
+                case etc_inout_order -> etcIds.add(tx.getRefId());
+                default -> {
+                }
+            }
+        }
+
+        Map<UUID, InboundOrders> inboundOrders = inboundOrderRepository.findAllById(inboundIds).stream()
+                .collect(Collectors.toMap(InboundOrders::getId, o -> o));
+        Map<UUID, OutboundOrders> outboundOrders = outboundOrderRepository.findAllById(outboundIds).stream()
+                .collect(Collectors.toMap(OutboundOrders::getId, o -> o));
+        Map<UUID, TransferOrder> transferOrders = transferOrderRepository.findAllById(transferIds).stream()
+                .collect(Collectors.toMap(TransferOrder::getId, o -> o));
+        Map<UUID, EtcInoutOrder> etcOrders = etcInoutOrderRepository.findAllById(etcIds).stream()
+                .collect(Collectors.toMap(EtcInoutOrder::getId, o -> o));
+
+        Map<UUID, ProductResDto> products = new HashMap<>();
+        if (!productIds.isEmpty()) {
+            try {
+                masterServiceClient.getProducts(new ArrayList<>(productIds), clientId.toString())
+                        .forEach(product -> products.put(product.getId(), product));
+            } catch (Exception ignored) {
+                // 상품 정보 조회 실패 시 sku 요약만 비운다.
+            }
+        }
+
+        return new ReferenceLookup(inboundOrders, outboundOrders, transferOrders, etcOrders, products);
+    }
+
+    private void accumulateFlow(StatisticFlowAccumulator bucket, InventoryTransaction tx, ReferenceLookup lookup) {
+        if (tx.getRefType() == null) {
+            return;
+        }
+
+        switch (tx.getRefType()) {
+            case inbound_order -> accumulateInbound(bucket, tx, lookup.inboundOrders());
+            case outbound_order -> accumulateOutbound(bucket, tx, lookup.outboundOrders());
+            case transfer_order -> accumulateTransfer(bucket, tx, lookup.transferOrders());
+            case etc_inout_order -> accumulateEtc(bucket, tx, lookup.etcOrders());
+            case manual, stock_count -> accumulateAdjustment(bucket, tx);
+        }
+    }
+
+    private void accumulateInbound(StatisticFlowAccumulator bucket, InventoryTransaction tx,
+                                   Map<UUID, InboundOrders> inboundOrders) {
+        if (tx.getQty() <= 0) return;
+        InboundOrders order = inboundOrders.get(tx.getRefId());
+        if (order != null && "return".equalsIgnoreCase(order.getOriginType())) {
+            bucket.returnInboundQty += tx.getQty();
+        } else {
+            bucket.normalInboundQty += tx.getQty();
+        }
+        bucket.addSku(tx.getProductId());
+        if (order != null) {
+            bucket.inboundOrders.put(order.getId(), toOrderLink(order.getId(), order.getOrderNo(), "inbound"));
+        }
+    }
+
+    private void accumulateOutbound(StatisticFlowAccumulator bucket, InventoryTransaction tx,
+                                    Map<UUID, OutboundOrders> outboundOrders) {
+        if (tx.getQty() >= 0) return;
+        int qty = Math.abs(tx.getQty());
+        OutboundOrders order = outboundOrders.get(tx.getRefId());
+        if (order != null && "return".equalsIgnoreCase(order.getOriginType())) {
+            bucket.returnOutboundQty += qty;
+        } else {
+            bucket.normalOutboundQty += qty;
+        }
+        bucket.addSku(tx.getProductId());
+        if (order != null) {
+            bucket.outboundOrders.put(order.getId(), toOrderLink(order.getId(), order.getOrderNo(), "outbound"));
+        }
+    }
+
+    private void accumulateTransfer(StatisticFlowAccumulator bucket, InventoryTransaction tx,
+                                    Map<UUID, TransferOrder> transferOrders) {
+        // 이동은 출발지 차감/중간보관/도착지 증가가 함께 찍히므로
+        // 실제 완료 물동량은 "도착 로케이션으로 들어온 +available" 만 집계한다.
+        if (tx.getQty() <= 0 || tx.getLocationId() == null) return;
+        bucket.transferQty += tx.getQty();
+        bucket.addSku(tx.getProductId());
+        TransferOrder order = transferOrders.get(tx.getRefId());
+        if (order != null) {
+            bucket.transferOrders.put(order.getId(), toOrderLink(order.getId(), order.getOrderNo(), "transfer"));
+        }
+    }
+
+    private void accumulateEtc(StatisticFlowAccumulator bucket, InventoryTransaction tx,
+                               Map<UUID, EtcInoutOrder> etcOrders) {
+        EtcInoutOrder order = etcOrders.get(tx.getRefId());
+        int qty = Math.abs(tx.getQty());
+
+        if (order != null) {
+            if (order.getDirection() == Direction.in && tx.getQty() > 0) {
+                bucket.etcInboundQty += tx.getQty();
+            } else if (order.getDirection() == Direction.out && tx.getQty() < 0) {
+                bucket.etcOutboundQty += qty;
+            } else {
+                return;
+            }
+            bucket.etcOrders.put(order.getId(),
+                    toOrderLink(order.getId(), order.getOrderNo(), order.getDirection() == Direction.in ? "etc_in" : "etc_out"));
+        } else {
+            return;
+        }
+
+        bucket.addSku(tx.getProductId());
+    }
+
+    private void accumulateAdjustment(StatisticFlowAccumulator bucket, InventoryTransaction tx) {
+        if (tx.getQty() > 0) {
+            bucket.adjustmentInboundQty += tx.getQty();
+        } else if (tx.getQty() < 0) {
+            bucket.adjustmentOutboundQty += Math.abs(tx.getQty());
+        }
+        bucket.addSku(tx.getProductId());
+    }
+
+    private DailyInoutDto toDailyDto(LocalDate date, StatisticFlowAccumulator bucket,
+                                     Map<UUID, ProductResDto> products) {
+        return DailyInoutDto.builder()
+                .date(date)
+                .inboundQty(bucket.totalInbound())
+                .outboundQty(bucket.totalOutbound())
+                .normalInboundQty(bucket.normalInboundQty)
+                .returnInboundQty(bucket.returnInboundQty)
+                .normalOutboundQty(bucket.normalOutboundQty)
+                .returnOutboundQty(bucket.returnOutboundQty)
+                .transferQty(bucket.transferQty)
+                .etcInboundQty(bucket.etcInboundQty)
+                .etcOutboundQty(bucket.etcOutboundQty)
+                .adjustmentInboundQty(bucket.adjustmentInboundQty)
+                .adjustmentOutboundQty(bucket.adjustmentOutboundQty)
+                .inboundOrders(new ArrayList<>(bucket.inboundOrders.values()))
+                .outboundOrders(new ArrayList<>(bucket.outboundOrders.values()))
+                .transferOrders(new ArrayList<>(bucket.transferOrders.values()))
+                .etcOrders(new ArrayList<>(bucket.etcOrders.values()))
+                .skuList(bucket.productIds.stream()
+                        .map(products::get)
+                        .filter(Objects::nonNull)
+                        .map(ProductResDto::getSku)
+                        .filter(Objects::nonNull)
+                        .toList())
+                .build();
+    }
+
+    private MonthlyInoutDto toMonthlyDto(LocalDate month, StatisticFlowAccumulator bucket) {
+        return MonthlyInoutDto.builder()
+                .month(month)
+                .inboundQty(bucket.totalInbound())
+                .outboundQty(bucket.totalOutbound())
+                .normalInboundQty(bucket.normalInboundQty)
+                .returnInboundQty(bucket.returnInboundQty)
+                .normalOutboundQty(bucket.normalOutboundQty)
+                .returnOutboundQty(bucket.returnOutboundQty)
+                .transferQty(bucket.transferQty)
+                .etcInboundQty(bucket.etcInboundQty)
+                .etcOutboundQty(bucket.etcOutboundQty)
+                .adjustmentInboundQty(bucket.adjustmentInboundQty)
+                .adjustmentOutboundQty(bucket.adjustmentOutboundQty)
+                .build();
+    }
+
+    private OrderLinkDto toOrderLink(UUID id, String orderNo, String type) {
+        return OrderLinkDto.builder()
+                .id(id)
+                .orderNo(orderNo)
+                .type(type)
+                .build();
+    }
+
+    private record ReferenceLookup(
+            Map<UUID, InboundOrders> inboundOrders,
+            Map<UUID, OutboundOrders> outboundOrders,
+            Map<UUID, TransferOrder> transferOrders,
+            Map<UUID, EtcInoutOrder> etcOrders,
+            Map<UUID, ProductResDto> products
+    ) {
+    }
+
+    private static class StatisticFlowAccumulator {
+        private int normalInboundQty;
+        private int returnInboundQty;
+        private int normalOutboundQty;
+        private int returnOutboundQty;
+        private int transferQty;
+        private int etcInboundQty;
+        private int etcOutboundQty;
+        private int adjustmentInboundQty;
+        private int adjustmentOutboundQty;
+        private final LinkedHashMap<UUID, OrderLinkDto> inboundOrders = new LinkedHashMap<>();
+        private final LinkedHashMap<UUID, OrderLinkDto> outboundOrders = new LinkedHashMap<>();
+        private final LinkedHashMap<UUID, OrderLinkDto> transferOrders = new LinkedHashMap<>();
+        private final LinkedHashMap<UUID, OrderLinkDto> etcOrders = new LinkedHashMap<>();
+        private final LinkedHashSet<UUID> productIds = new LinkedHashSet<>();
+
+        private void addSku(UUID productId) {
+            if (productId != null) {
+                productIds.add(productId);
+            }
+        }
+
+        private int totalInbound() {
+            return normalInboundQty + returnInboundQty + etcInboundQty + adjustmentInboundQty;
+        }
+
+        private int totalOutbound() {
+            return normalOutboundQty + returnOutboundQty + etcOutboundQty + adjustmentOutboundQty;
+        }
     }
 
     // ============================================================

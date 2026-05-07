@@ -512,6 +512,14 @@ public class OutboundService {
                 .map(OutboundSalesOrderLinks::getSalesOrderId)
                 .distinct()
                 .toList();
+        // 같은 순서로 SO 번호 매핑 (id 없는 건은 빈 문자열로)
+        Map<UUID, String> soNoById = sourceSalesOrderIds.isEmpty()
+                ? Map.of()
+                : erpSalesOrdersRepository.findAllById(sourceSalesOrderIds).stream()
+                        .collect(Collectors.toMap(ErpSalesOrders::getId, ErpSalesOrders::getSalesOrderNumber));
+        List<String> sourceSalesOrderNos = sourceSalesOrderIds.stream()
+                .map(soId -> soNoById.getOrDefault(soId, ""))
+                .toList();
 
         return OutboundOrderDetailResDto.builder()
                 .id(order.getId())
@@ -532,6 +540,7 @@ public class OutboundService {
                 .items(itemResDtos)
                 .pickingListIds(pickingListIds)
                 .sourceSalesOrderIds(sourceSalesOrderIds)
+                .sourceSalesOrderNos(sourceSalesOrderNos)
                 .build();
     }
 
@@ -1244,10 +1253,37 @@ public class OutboundService {
         String storeName = fetchStoreName(outboundOrder.getStoreId(), clientId);
         String dispatchedByName = fetchUserName(outboundDispatch.getDispatchedBy(), requesterId);
 
+        // 출처 수주서 정보 채우기 — sales_order 일 때만 링크 조회, 아니면 빈 리스트
+        String originType = outboundOrder.getOriginType();
+        List<OutboundDispatchListItemResDto.OriginRef> originRefs = new ArrayList<>();
+        if ("sales_order".equalsIgnoreCase(originType)) {
+            List<UUID> soIds = outboundSalesOrderLinksRepository
+                    .findByOutboundOrderIdAndCancelledAtIsNull(outboundOrder.getId())
+                    .stream()
+                    .map(OutboundSalesOrderLinks::getSalesOrderId)
+                    .distinct()
+                    .toList();
+            if (!soIds.isEmpty()) {
+                Map<UUID, String> soNoById = erpSalesOrdersRepository.findAllById(soIds).stream()
+                        .collect(Collectors.toMap(ErpSalesOrders::getId, ErpSalesOrders::getSalesOrderNumber));
+                for (UUID soId : soIds) {
+                    String soNo = soNoById.get(soId);
+                    if (soNo != null) {
+                        originRefs.add(OutboundDispatchListItemResDto.OriginRef.builder()
+                                .id(soId)
+                                .no(soNo)
+                                .build());
+                    }
+                }
+            }
+        }
+
         return OutboundDispatchResDto.builder()
                 .id(outboundDispatch.getId())
                 .orderNo(outboundOrder.getOrderNo())
                 .dispatchNo(outboundDispatch.getDispatchNo())
+                .originType(originType)
+                .originRefs(originRefs)
                 .warehouseName(warehouseName)
                 .storeName(storeName)
                 .dispatchedBy(outboundDispatch.getDispatchedBy())

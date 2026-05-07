@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import com.beyond.wbs.outbounds.domain.*;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -300,6 +301,116 @@ public class InventoryService {
     public List<InventoryResDto> getInventoriesByClient(UUID clientId) {
         List<Inventory> list = inventoryRepository.findByClientId(clientId);
         return toResDtos(list, clientId);
+    }
+
+    /**
+     * 조회일자 기준 재고 현황 (날짜 시점 역산).
+     *
+     * 동작:
+     *  1. 현재 Inventory 의 status별 수량을 시작점으로 둔다.
+     *  2. (date 다음날 00:00:00 ~ now) 사이의 모든 트랜잭션을
+     *     (productId, warehouseId, locationId, statusTo) 별로 합산해 변동합을 구한다.
+     *  3. 현재값 - 변동합 = 그 날 시점의 status별 수량.
+     *
+     * 예) 오늘이 5/6 이고 date=4/15 이면
+     *     fromTs = 4/16 00:00:00, toTs = now → 4/15 자정까지의 변동을 모두 빼서 4/15 24:00 시점 값.
+     *
+     * 미래 날짜를 입력하면 현재값 그대로.
+     */
+    @Transactional(readOnly = true)
+    public List<InventoryResDto> getInventoriesByDate(UUID clientId, UUID warehouseId, LocalDate date) {
+        // Step 1. 베이스 Inventory 조회 (clientId 필터 + staging 행 제외)
+        List<Inventory> source = warehouseId != null
+                ? inventoryRepository.findByWarehouseId(warehouseId)
+                : inventoryRepository.findByClientId(clientId);
+        List<Inventory> baseInventories = new ArrayList<>();
+        for (Inventory inv : source) {
+            if (!clientId.equals(inv.getClientId())) continue;
+            if (inv.getLocationId() == null) continue; // null-location staging 행 제외
+            baseInventories.add(inv);
+        }
+
+        // Step 2. (date 다음날 00:00:00 ~ now) 트랜잭션 → status별 변동합 집계
+        LocalDateTime fromTs = date.plusDays(1).atStartOfDay();
+        LocalDateTime now = LocalDateTime.now();
+        Map<String, Integer> deltaMap = new HashMap<>();
+        if (fromTs.isBefore(now)) {
+            List<InventoryTransaction> txList = transactionRepository
+                    .findAllStatusTransactionsInRange(clientId, warehouseId, fromTs, now);
+            for (InventoryTransaction tx : txList) {
+                if (tx.getStatusTo() == null) continue;
+                String key = makeStatusKey(tx.getProductId(), tx.getWarehouseId(),
+                        tx.getLocationId(), tx.getStatusTo());
+                deltaMap.merge(key, tx.getQty(), Integer::sum);
+            }
+        }
+
+        // Step 3. 현재값 - 변동합 = 과거값. Feign 캐시는 toResDtos 와 동일하게 운용.
+        Map<UUID, ProductResDto> productCache = new HashMap<>();
+        Map<UUID, String> warehouseNameCache = new HashMap<>();
+        Map<UUID, LocationResDto> locationCache = new HashMap<>();
+
+        List<InventoryResDto> result = new ArrayList<>();
+        for (Inventory inv : baseInventories) {
+            int pastAvailable = (inv.getAvailableQty() != null ? inv.getAvailableQty() : 0)
+                    - getDelta(deltaMap, inv, InventoryStatus.available);
+            int pastReserved  = (inv.getReservedQty()  != null ? inv.getReservedQty()  : 0)
+                    - getDelta(deltaMap, inv, InventoryStatus.reserved);
+            int pastDefect    = (inv.getDefectQty()    != null ? inv.getDefectQty()    : 0)
+                    - getDelta(deltaMap, inv, InventoryStatus.defect);
+            int pastPending   = (inv.getPendingQty()   != null ? inv.getPendingQty()   : 0)
+                    - getDelta(deltaMap, inv, InventoryStatus.pending);
+            int pastIncoming  = (inv.getIncomingQty()  != null ? inv.getIncomingQty()  : 0)
+                    - getDelta(deltaMap, inv, InventoryStatus.incoming);
+
+            // 음수 방어 (트랜잭션 누락/이상치) — 0 으로 클램프
+            pastAvailable = Math.max(0, pastAvailable);
+            pastReserved  = Math.max(0, pastReserved);
+            pastDefect    = Math.max(0, pastDefect);
+            pastPending   = Math.max(0, pastPending);
+            pastIncoming  = Math.max(0, pastIncoming);
+            int pastTotal = pastAvailable + pastReserved + pastDefect + pastPending;
+
+            // 그 시점 재고가 전부 0 이면 결과에서 제외
+            if (pastTotal == 0 && pastIncoming == 0) continue;
+
+            ProductResDto product = productCache.computeIfAbsent(inv.getProductId(),
+                    pid -> fetchProduct(pid, clientId));
+            String productName = product != null ? product.getName() : null;
+            String productSku  = product != null ? product.getSku()  : null;
+            String warehouseName = warehouseNameCache.computeIfAbsent(
+                    inv.getWarehouseId(), wid -> fetchWarehouseName(wid, clientId));
+            LocationResDto location = locationCache.computeIfAbsent(
+                    inv.getLocationId(), lid -> fetchLocation(lid, clientId));
+
+            // 영속 객체를 변형하지 않기 위해 임시 Inventory 인스턴스 생성
+            Inventory snap = Inventory.builder()
+                    .id(inv.getId())
+                    .clientId(inv.getClientId())
+                    .productId(inv.getProductId())
+                    .warehouseId(inv.getWarehouseId())
+                    .locationId(inv.getLocationId())
+                    .availableQty(pastAvailable)
+                    .reservedQty(pastReserved)
+                    .defectQty(pastDefect)
+                    .incomingQty(pastIncoming)
+                    .pendingQty(pastPending)
+                    .totalQty(pastTotal)
+                    .updatedAt(inv.getUpdatedAt())
+                    .build();
+            result.add(InventoryResDto.fromEntity(snap, productName, productSku, warehouseName, location));
+        }
+        return result;
+    }
+
+    private int getDelta(Map<String, Integer> deltaMap, Inventory inv, InventoryStatus status) {
+        return deltaMap.getOrDefault(
+                makeStatusKey(inv.getProductId(), inv.getWarehouseId(), inv.getLocationId(), status),
+                0);
+    }
+
+    private String makeStatusKey(UUID productId, UUID warehouseId, UUID locationId, InventoryStatus status) {
+        return productId + "|" + warehouseId + "|" + locationId + "|" + status;
     }
 
     /**

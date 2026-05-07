@@ -22,7 +22,15 @@ public class InboundOrderResDto {
     private String expectedDate;
     private String status;
     private String source;
-    private UUID originId;          // 원본 ID (ASN ID / 출고지시서 ID)
+    private UUID originId;          // 원본 ID (발주서 ID / 출고지시서 ID)
+    /**
+     * 원본 번호 — source 별 의미:
+     *   - purchase_order : 발주서 번호 (예: PO-TEST-005)
+     *   - return         : 원본 출고지시서 번호
+     *   - manual         : null
+     * 상세 응답에서만 채움. 목록/생성 응답은 null.
+     */
+    private String originNo;
     private String returnFrom;      // 반품 출고처명 (source="return" 일 때만 값 있음)
     private UUID createdBy;
     private String createdByName;

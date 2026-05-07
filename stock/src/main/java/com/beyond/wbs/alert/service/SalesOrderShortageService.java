@@ -118,14 +118,26 @@ public class SalesOrderShortageService {
             String redisKey = REDIS_KEY_PREFIX + clientId;
             String destination = "/topic/admin/alerts/" + clientId;
 
-            // 신규 부족 + 변경됨 — 모두 "added" 로 push (FE store 가 SO ID 기준 upsert)
-            Set<UUID> toPushAdded = new HashSet<>(added);
-            toPushAdded.addAll(updated);
-            for (UUID soId : toPushAdded) {
+            // 신규 부족 — "added" push + audit "출고불가발생"
+            for (UUID soId : added) {
                 SalesOrderShortageAlertDto alert = current.get(soId);
                 alert.setType(TYPE_ADDED);
                 webSocketPublisher.send(destination, alert);
                 alertAuditLogger.log(AlertAuditLogger.ACTION_SO_SHORTAGE_ADDED, clientId, alert);
+                try {
+                    redisTemplate.opsForHash().put(redisKey, soId.toString(), objectMapper.writeValueAsString(alert));
+                } catch (Exception e) {
+                    log.warn("[SO 부족] Redis 저장 실패 soId={} - {}", soId, e.getMessage());
+                }
+            }
+
+            // 기존 부족 SO 의 수량 변동(부분 해소) — WS 는 "added" 로 동일 (FE store 가 upsert),
+            // audit 만 "출고불가부분해소" 로 분리해 알림 이력에서 신규/부분해소 구분 가능.
+            for (UUID soId : updated) {
+                SalesOrderShortageAlertDto alert = current.get(soId);
+                alert.setType(TYPE_ADDED);
+                webSocketPublisher.send(destination, alert);
+                alertAuditLogger.log(AlertAuditLogger.ACTION_SO_SHORTAGE_UPDATED, clientId, alert);
                 try {
                     redisTemplate.opsForHash().put(redisKey, soId.toString(), objectMapper.writeValueAsString(alert));
                 } catch (Exception e) {

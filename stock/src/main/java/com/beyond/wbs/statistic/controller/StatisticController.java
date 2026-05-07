@@ -38,17 +38,19 @@ public class StatisticController {
      * 월별 입출고 추이
      *
      * 예) GET /statistic/monthly-inout?from=2026-01&to=2026-04
+     *     GET /statistic/monthly-inout?from=2026-01&to=2026-04&warehouseId=...
      */
     @AuditLog
     @GetMapping("/monthly-inout")
     public ResponseEntity<?> getMonthlyInout(
             @RequestParam String from,
             @RequestParam String to,
+            @RequestParam(required = false) UUID warehouseId,
             @RequestHeader("X-Client-Id") String clientId) {
         LocalDate fromDate = parseYearMonth(from);
         LocalDate toDate = parseYearMonth(to);
         return ResponseEntity.ok(
-                statisticService.getMonthlyInout(UUID.fromString(clientId), fromDate, toDate));
+                statisticService.getMonthlyInout(UUID.fromString(clientId), fromDate, toDate, warehouseId));
     }
 
     /**

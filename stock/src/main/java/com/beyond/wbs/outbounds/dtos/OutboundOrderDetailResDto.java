@@ -70,6 +70,10 @@ public class OutboundOrderDetailResDto {
     // — 출고지시서 상세 화면에서 "원본 수주서 진행률"로 역참조할 때 사용
     private List<UUID> sourceSalesOrderIds;
 
+    // 위 ID 들의 수주서 번호 (SO-XXX). 같은 순서로 매핑.
+    // 상세 화면/인쇄에서 "어떤 수주서로 만들어진 출고지시서" 인지 표시용.
+    private List<String> sourceSalesOrderNos;
+
     // 출처 유형 — 'sales_order' / 'manual' / 'return'
     private String originType;
 

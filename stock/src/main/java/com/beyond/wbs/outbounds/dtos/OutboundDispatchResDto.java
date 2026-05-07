@@ -21,6 +21,13 @@ public class OutboundDispatchResDto {
     // 출고 전표 번호
     private String dispatchNo;
 
+    // 출처 유형 — "sales_order" / "manual" / "return"
+    private String originType;
+
+    // 출처 수주서들 — sales_order 케이스에 OutboundSalesOrderLinks 통해 연결된 SO 들 (분할 출고로 N개 가능)
+    // manual / return 일 땐 빈 리스트
+    private List<OutboundDispatchListItemResDto.OriginRef> originRefs;
+
     // 창고명 (TODO: Feign Client로 Master Service 조회)
     private String warehouseName;
 

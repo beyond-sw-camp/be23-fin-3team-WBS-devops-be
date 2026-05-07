@@ -84,6 +84,25 @@ public class InventoryController {
     }
 
     /**
+     * 조회일자 기준 재고 현황 (해당 날짜 시점 역산).
+     *
+     * 응답 포맷은 /findAll 과 동일한 InventoryResDto 리스트.
+     * 수량 필드만 해당 날짜 시점의 값으로 채워진다.
+     *
+     * 예) GET /inventory/by-date?date=2026-04-15
+     *     GET /inventory/by-date?date=2026-04-15&warehouseId=...
+     */
+    @AuditLog
+    @GetMapping("/by-date")
+    public ResponseEntity<?> getInventoriesByDate(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+            @RequestParam(required = false) UUID warehouseId,
+            @RequestHeader("X-Client-Id") String clientId) {
+        return ResponseEntity.ok(
+                inventoryService.getInventoriesByDate(UUID.fromString(clientId), warehouseId, date));
+    }
+
+    /**
      * 주어진 location 집합 중 재고 보유 행이 하나라도 있는지 검사.
      * Master Service 의 랙 비활성화 가드에서 호출.
      */

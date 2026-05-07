@@ -951,17 +951,28 @@ public class InboundService {
         String warehouseName = resolveWarehouseName(order.getWarehouseId(), clientId);
         String createdByName = resolveUserName(order.getCreatedBy(), requesterId);
 
-        // 반품 입고면 출고처명 조회
+        // 반품 입고면 출고처명 + 원본 출고지시서 번호 조회
         String returnFrom = null;
+        String originNo = null;
         if ("return".equals(order.getOriginType()) && order.getOriginId() != null) {
             OutboundOrders outbound = outboundOrderRepository.findById(order.getOriginId()).orElse(null);
-            if (outbound != null && outbound.getStoreId() != null) {
-                returnFrom = resolveStoreName(outbound.getStoreId(), clientId);
+            if (outbound != null) {
+                originNo = outbound.getOrderNo();
+                if (outbound.getStoreId() != null) {
+                    returnFrom = resolveStoreName(outbound.getStoreId(), clientId);
+                }
             }
+        } else if ("purchase_order".equals(order.getOriginType()) && order.getOriginId() != null) {
+            // 일반 발주서로 만들어진 입고지시서 — 원본 발주서 번호(PO-XXX) 채워 상세 화면/인쇄에서 노출
+            originNo = erpPurchaseOrderRepository.findById(order.getOriginId())
+                    .map(ErpPurchaseOrders::getPoNo)
+                    .orElse(null);
         }
 
-        return InboundOrderResDto.fromEntity(order, supplierName, warehouseName, createdByName,
+        InboundOrderResDto dto = InboundOrderResDto.fromEntity(order, supplierName, warehouseName, createdByName,
                 items.size(), totalQty, returnFrom);
+        dto.setOriginNo(originNo);
+        return dto;
     }
 
     /**

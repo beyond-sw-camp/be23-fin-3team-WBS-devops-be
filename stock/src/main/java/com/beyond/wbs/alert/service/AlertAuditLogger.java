@@ -30,6 +30,7 @@ public class AlertAuditLogger {
     public static final String ACTION_LOW_STOCK_ADDED = "재고부족발생";
     public static final String ACTION_LOW_STOCK_RESOLVED = "재고부족해소";
     public static final String ACTION_SO_SHORTAGE_ADDED = "출고불가발생";
+    public static final String ACTION_SO_SHORTAGE_UPDATED = "출고불가부분해소";   // 부족 수량이 부분 해소/변동된 케이스 — 이력 분류용 (toast 는 별도 정책)
     public static final String ACTION_SO_SHORTAGE_RESOLVED = "출고불가해소";
 
     private final AuditLogRepository auditLogRepository;

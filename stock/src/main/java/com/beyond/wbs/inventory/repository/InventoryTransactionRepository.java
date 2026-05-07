@@ -75,4 +75,19 @@ public interface InventoryTransactionRepository extends JpaRepository<InventoryT
             @Param("clientId") UUID clientId,
             @Param("from") LocalDateTime from,
             @Param("to") LocalDateTime to);
+
+    /**
+     * 특정 기간 내 모든 status 트랜잭션 조회 (조회일자별 재고 역산용).
+     * (productId, warehouseId, locationId, status) 별로 변동합을 구한 뒤
+     * 현재값에서 빼면 과거 시점의 status별 수량을 얻을 수 있다.
+     */
+    @Query("SELECT t FROM InventoryTransaction t " +
+            "WHERE t.clientId = :clientId " +
+            "AND (:warehouseId IS NULL OR t.warehouseId = :warehouseId) " +
+            "AND t.createdAt >= :from AND t.createdAt < :to")
+    List<InventoryTransaction> findAllStatusTransactionsInRange(
+            @Param("clientId") UUID clientId,
+            @Param("warehouseId") UUID warehouseId,
+            @Param("from") LocalDateTime from,
+            @Param("to") LocalDateTime to);
 }
