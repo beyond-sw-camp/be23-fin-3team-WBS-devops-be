@@ -29,9 +29,14 @@ public class InitialDataLoad implements CommandLineRunner {
     // master / stock data.sql 과 동일한 client_id
     private static final UUID DUMMY_CLIENT_ID =
             UUID.fromString("01935c00-0000-7000-8000-000000000001");
+    private static final UUID SY_CLIENT_ID =
+            UUID.fromString("01935c00-0000-7000-8000-000000000201");
 
     // 사용자 고정 UUID — stock data.sql 의 created_by/approved_by/assigned_to 에서 참조
     private static final UUID USER_ADMIN1    = UUID.fromString("01935c00-0000-8000-8000-000000000001");
+    private static final UUID USER_ADMIN2    = UUID.fromString("01935c00-0000-8000-8000-000000000021");
+    private static final UUID USER_MANAGER6  = UUID.fromString("01935c00-0000-8000-8000-000000000022");
+    private static final UUID USER_OPERATOR16 = UUID.fromString("01935c00-0000-8000-8000-000000000023");
     private static final UUID USER_MANAGER1  = UUID.fromString("01935c00-0000-8000-8000-000000000002");
     private static final UUID USER_MANAGER2  = UUID.fromString("01935c00-0000-8000-8000-000000000003");
     private static final UUID USER_MANAGER3  = UUID.fromString("01935c00-0000-8000-8000-000000000004");
@@ -79,6 +84,9 @@ public class InitialDataLoad implements CommandLineRunner {
 
         // 3. 더미 Client + Role 3종 + 사용자 21명 생성
         seedDummyClient();
+
+        // 4. 발표용 Client + admin2 계정 생성
+        seedPresentationClient();
     }
 
     private void seedPermissions() {
@@ -187,6 +195,41 @@ public class InitialDataLoad implements CommandLineRunner {
 
         createDummyUser(client, operatorRole, "송검수",       "operator14", "op14@test.com");
         createDummyUser(client, operatorRole, "노반품",       "operator15", "op15@test.com");
+    }
+
+    /**
+     * 발표용 회사 + 관리자 계정(admin2).
+     *
+     * 발표 시 기존 테스트회사(admin1)와 분리해서 계정/데이터를 전달하기 위한 전용 시드.
+     * master / stock 의 data_SY.sql 과 동일한 client_id 를 사용한다.
+     */
+    private void seedPresentationClient() {
+        Client client = companyRepository.findById(SY_CLIENT_ID)
+                .orElseGet(() -> companyRepository.saveAndFlush(Client.builder()
+                        .id(SY_CLIENT_ID)
+                        .name("SY 발표회사")
+                        .bizNo("987-65-43210")
+                        .build()));
+
+        List<Permission> allPermissions = permissionRepository.findAll();
+
+        Role adminRole = ensureSystemRole(client, "ADMIN", "관리자", "회사 관리자");
+        Role managerRole = ensureSystemRole(client, "MANAGER", "매니저", "지시서 생성/승인/실행");
+        Role operatorRole = ensureSystemRole(client, "OPERATOR", "오퍼레이터", "현장 실행/조회");
+
+        if (rolePermissionRepository.findByRoleIdWithPermission(adminRole.getId()).isEmpty()) {
+            assignAllPermissions(adminRole, allPermissions);
+        }
+        if (rolePermissionRepository.findByRoleIdWithPermission(managerRole.getId()).isEmpty()) {
+            assignAllPermissions(managerRole, allPermissions);
+        }
+        if (rolePermissionRepository.findByRoleIdWithPermission(operatorRole.getId()).isEmpty()) {
+            assignOperatorPermissions(operatorRole, allPermissions);
+        }
+
+        createDummyUser(client, adminRole, "발표관리자", "admin2", "admin2@sy-demo.com", USER_ADMIN2);
+        createDummyUser(client, managerRole, "발표매니저", "manager6", "manager6@sy-demo.com", USER_MANAGER6);
+        createDummyUser(client, operatorRole, "발표오퍼레이터", "operator16", "operator16@sy-demo.com", USER_OPERATOR16);
     }
 
     /**
