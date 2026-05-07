@@ -5,7 +5,7 @@ plugins {
     id 'maven-publish'
 }
 
-group = 'com.beyond'
+group = 'com.beyond.wbs'
 version = System.getenv('COMMON_VERSION') ?: file('VERSION').text.trim()
 
 // 라이브러리이므로 bootJar 비활성화, 일반 jar 활성화

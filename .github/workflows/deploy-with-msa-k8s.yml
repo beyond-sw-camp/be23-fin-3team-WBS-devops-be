@@ -47,13 +47,15 @@ jobs:
       - name: check common package version
         id: package
         env:
-          GPR_USER: ${{ secrets.GPR_USER }}
           GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
         run: |
           COMMON_VERSION="${{ steps.common.outputs.common-version }}"
-          METADATA_URL="https://maven.pkg.github.com/beyond-sw-camp/be23-fin-3team-WBS-devops-be/com/beyond/common/maven-metadata.xml"
+          PACKAGE_API="https://api.github.com/orgs/beyond-sw-camp/packages/maven/com.beyond.wbs.common/versions?per_page=100"
 
-          if curl -fsL -u "$GPR_USER:$GPR_TOKEN" "$METADATA_URL" | grep -q "<version>${COMMON_VERSION}</version>"; then
+          if curl -fsL \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GPR_TOKEN}" \
+            "$PACKAGE_API" | jq -e --arg version "$COMMON_VERSION" '.[] | select(.name == $version)' > /dev/null; then
             echo "common-exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "common-exists=false" >> "$GITHUB_OUTPUT"
@@ -83,7 +85,21 @@ jobs:
           COMMON_VERSION: ${{ needs.prepare-common.outputs.common-version }}
         run: |
           chmod +x ./gradlew
-          ./gradlew publish --no-daemon
+          set +e
+          ./gradlew publish --no-daemon 2>&1 | tee publish.log
+          status=${PIPESTATUS[0]}
+          set -e
+
+          if [ "$status" -eq 0 ]; then
+            exit 0
+          fi
+
+          if grep -q "Received status code 422" publish.log; then
+            echo "common version ${COMMON_VERSION} already exists in GitHub Packages. Continue with existing package."
+            exit 0
+          fi
+
+          exit "$status"
 
   build-and-deploy:
     runs-on: ubuntu-latest

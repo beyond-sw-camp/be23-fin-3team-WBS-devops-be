@@ -34,7 +34,7 @@ dependencyManagement {
 }
 
 dependencies {
-    implementation "com.beyond:common:${commonVersion}"
+    implementation "com.beyond.wbs:common:${commonVersion}"
 
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
