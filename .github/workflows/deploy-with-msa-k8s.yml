@@ -11,11 +11,42 @@ env:
   REGISTRY: 739272173743.dkr.ecr.ap-northeast-2.amazonaws.com
   CLUSTER_NAME: wbs-cluster
   NAMESPACE: wbs-ns
-  COMMON_VERSION: 0.0.${{ github.run_number }}
 
 jobs:
+  prepare-common:
+    runs-on: ubuntu-latest
+    outputs:
+      common-version: ${{ steps.common.outputs.common-version }}
+      common-changed: ${{ steps.common.outputs.common-changed }}
+
+    steps:
+      - name: checkout github
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ===================== common =====================
+      - name: detect common changes
+        id: common
+        run: |
+          COMMON_VERSION="$(cat common/VERSION)"
+          echo "common-version=$COMMON_VERSION" >> "$GITHUB_OUTPUT"
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "common-changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" | grep -q '^common/'; then
+            echo "common-changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "common-changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
   publish-common:
     runs-on: ubuntu-latest
+    needs: prepare-common
+    if: needs.prepare-common.outputs.common-changed == 'true'
 
     steps:
       - name: checkout github
@@ -29,19 +60,35 @@ jobs:
           cache: gradle
 
       # ===================== common =====================
+      - name: verify common version is new
+        env:
+          GPR_USER: ${{ secrets.GPR_USER }}
+          GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
+          COMMON_VERSION: ${{ needs.prepare-common.outputs.common-version }}
+        run: |
+          ARTIFACT_URL="https://maven.pkg.github.com/beyond-sw-camp/be23-fin-3team-WBS-devops-be/com/beyond/common/${COMMON_VERSION}/common-${COMMON_VERSION}.jar"
+          if curl -fsI -u "$GPR_USER:$GPR_TOKEN" "$ARTIFACT_URL" > /dev/null; then
+            echo "common version ${COMMON_VERSION} already exists in GitHub Packages."
+            echo "Bump common/VERSION before publishing changed common code."
+            exit 1
+          fi
+
       - name: common publish to github packages
         working-directory: ./common
         env:
           GPR_USER: ${{ secrets.GPR_USER }}
           GPR_TOKEN: ${{ secrets.GPR_TOKEN }}
-          COMMON_VERSION: ${{ env.COMMON_VERSION }}
+          COMMON_VERSION: ${{ needs.prepare-common.outputs.common-version }}
         run: |
           chmod +x ./gradlew
           ./gradlew publish --no-daemon
 
   build-and-deploy:
     runs-on: ubuntu-latest
-    needs: publish-common
+    needs:
+      - prepare-common
+      - publish-common
+    if: always() && needs.prepare-common.result == 'success' && (needs.publish-common.result == 'success' || needs.publish-common.result == 'skipped')
 
     strategy:
       fail-fast: false
@@ -111,7 +158,7 @@ jobs:
           push: true
           tags: ${{ env.REGISTRY }}/${{ matrix.repository }}:latest
           build-args: |
-            COMMON_VERSION=${{ env.COMMON_VERSION }}
+            COMMON_VERSION=${{ needs.prepare-common.outputs.common-version }}
           secrets: |
             gpr_user=${{ secrets.GPR_USER }}
             gpr_token=${{ secrets.GPR_TOKEN }}

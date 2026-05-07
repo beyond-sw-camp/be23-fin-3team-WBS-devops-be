@@ -6,7 +6,7 @@ plugins {
 
 group = 'com.beyond'
 version = '0.0.1-SNAPSHOT'
-def commonVersion = project.findProperty('common.version') ?: System.getenv('COMMON_VERSION') ?: '0.0.1-SNAPSHOT'
+def commonVersion = project.findProperty('common.version') ?: System.getenv('COMMON_VERSION') ?: file('../common/VERSION').text.trim()
 
 java {
     toolchain {
