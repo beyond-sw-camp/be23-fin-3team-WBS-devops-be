@@ -9,18 +9,19 @@ metadata:
   namespace: wbs-ns
   annotations:
     kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: wbs-letsencrypt-prod
     nginx.ingress.kubernetes.io/proxy-buffering: "off"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
 spec:
-  # 도메인과 TLS secret이 준비되면 아래 설정을 추가한다.
-  # tls:
-  # - hosts:
-  #   - server.your-domain.com
-  #   secretName: server-wbs-tls
+  tls:
+  - hosts:
+    - server.wbs.asia
+    secretName: server-wbs-tls
   rules:
-  - http:
+  - host: server.wbs.asia
+    http:
       paths:
       - path: /
         pathType: Prefix

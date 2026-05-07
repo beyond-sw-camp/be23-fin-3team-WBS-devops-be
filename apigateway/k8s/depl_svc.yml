@@ -24,7 +24,7 @@ spec:
         - name: API_GATEWAY_SERVER_PORT
           value: "8080"
         - name: GATEWAY_ALLOWED_ORIGINS
-          value: https://your-frontend.example.com
+          value: https://www.wbs.asia
         - name: GATEWAY_CONNECT_TIMEOUT_MS
           value: "3000"
         - name: GATEWAY_RESPONSE_TIMEOUT
