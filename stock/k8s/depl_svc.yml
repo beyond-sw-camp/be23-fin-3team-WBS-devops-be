@@ -41,7 +41,7 @@ spec:
         - name: STOCK_KAFKA_GROUP_ID
           value: stock-group
         - name: STOCK_STREAMS_APPLICATION_ID
-          value: stock-streams
+          value: stock-streams-v2
         - name: STOCK_KAFKA_STREAMS_STATE_DIR
           value: /tmp/kafka-streams/stock
         - name: KAFKA_REPLICATION_FACTOR
