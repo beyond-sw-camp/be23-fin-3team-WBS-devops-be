@@ -21,4 +21,7 @@ GRANT ALL PRIVILEGES ON account_db.* TO 'wbs_account'@'%';
 GRANT ALL PRIVILEGES ON master_db.* TO 'wbs_master'@'%';
 GRANT ALL PRIVILEGES ON stock_db.* TO 'wbs_stock'@'%';
 
+-- AiWorkQueryService(stock)는 master_db에 cross-DB 조회를 수행하므로 읽기 권한 부여
+GRANT SELECT ON master_db.* TO 'wbs_stock'@'%';
+
 FLUSH PRIVILEGES;
