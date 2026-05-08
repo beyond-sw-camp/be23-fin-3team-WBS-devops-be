@@ -87,7 +87,7 @@
 -- =============================================
 -- 채번 테이블 초기 데이터
 -- =============================================
-INSERT INTO sequences (type, current_val)
+INSERT IGNORE INTO sequences (type, current_val)
 VALUES ('order', 0),
        ('picking', 0),
        ('dispatch', 0),
@@ -97,7 +97,8 @@ VALUES ('order', 0),
        ('placement', 0),
        ('receipt', 0),
        ('etc_inout', 0),
-       ('stock_count', 0);
+       ('stock_count', 0)
+ON DUPLICATE KEY UPDATE current_val = current_val;
 
 -- =============================================
 -- ERP 수주서 더미 데이터 (10건)
@@ -105,7 +106,7 @@ VALUES ('order', 0),
 -- =============================================
 
 -- 1번 수주서 (강남지점)
-INSERT INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
+INSERT IGNORE INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
 VALUES (
     UNHEX(REPLACE('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001', '-', '')),
@@ -115,7 +116,7 @@ VALUES (
 );
 
 -- 2번 수주서 (강남지점)
-INSERT INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
+INSERT IGNORE INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
 VALUES (
     UNHEX(REPLACE('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001', '-', '')),
@@ -125,7 +126,7 @@ VALUES (
 );
 
 -- 3번 수주서 (강남지점)
-INSERT INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
+INSERT IGNORE INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
 VALUES (
     UNHEX(REPLACE('cccccccc-cccc-cccc-cccc-cccccccccccc', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001', '-', '')),
@@ -135,7 +136,7 @@ VALUES (
 );
 
 -- 4번 수주서 (강남지점)
-INSERT INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
+INSERT IGNORE INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
 VALUES (
     UNHEX(REPLACE('dddddddd-dddd-dddd-dddd-dddddddddddd', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001', '-', '')),
@@ -145,7 +146,7 @@ VALUES (
 );
 
 -- 5번 수주서 (강남지점)
-INSERT INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
+INSERT IGNORE INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
 VALUES (
     UNHEX(REPLACE('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001', '-', '')),
@@ -155,7 +156,7 @@ VALUES (
 );
 
 -- 6번 수주서 (부산지점)
-INSERT INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
+INSERT IGNORE INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
 VALUES (
     UNHEX(REPLACE('ffffffff-ffff-ffff-ffff-ffffffffffff', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001', '-', '')),
@@ -165,7 +166,7 @@ VALUES (
 );
 
 -- 7번 수주서 (부산지점)
-INSERT INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
+INSERT IGNORE INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
 VALUES (
     UNHEX(REPLACE('11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001', '-', '')),
@@ -175,7 +176,7 @@ VALUES (
 );
 
 -- 8번 수주서 (부산지점)
-INSERT INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
+INSERT IGNORE INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
 VALUES (
     UNHEX(REPLACE('22222222-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001', '-', '')),
@@ -185,7 +186,7 @@ VALUES (
 );
 
 -- 9번 수주서 (부산지점)
-INSERT INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
+INSERT IGNORE INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
 VALUES (
     UNHEX(REPLACE('33333333-cccc-cccc-cccc-cccccccccccc', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001', '-', '')),
@@ -195,7 +196,7 @@ VALUES (
 );
 
 -- 10번 수주서 (부산지점)
-INSERT INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
+INSERT IGNORE INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
 VALUES (
     UNHEX(REPLACE('44444444-dddd-dddd-dddd-dddddddddddd', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001', '-', '')),
@@ -210,21 +211,21 @@ VALUES (
 -- =============================================
 
 -- 1번 수주서 품목 (USB-C 케이블 + USB 허브 + 키보드)
-INSERT INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
+INSERT IGNORE INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
 VALUES (
     UNHEX(REPLACE('a0000001-0001-0001-0001-000000000001', '-', '')),
     UNHEX(REPLACE('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7700-8000-000000000001', '-', '')),
     100, 0, 0, 8900.00, NULL
 );
-INSERT INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
+INSERT IGNORE INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
 VALUES (
     UNHEX(REPLACE('a0000001-0001-0001-0001-000000000002', '-', '')),
     UNHEX(REPLACE('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7700-8000-000000000002', '-', '')),
     80, 0, 0, 15900.00, NULL
 );
-INSERT INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
+INSERT IGNORE INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
 VALUES (
     UNHEX(REPLACE('a0000001-0001-0001-0001-000000000003', '-', '')),
     UNHEX(REPLACE('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '-', '')),
@@ -233,14 +234,14 @@ VALUES (
 );
 
 -- 2번 수주서 품목 (케이블 + 마우스)
-INSERT INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
+INSERT IGNORE INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
 VALUES (
     UNHEX(REPLACE('b0000001-0001-0001-0001-000000000001', '-', '')),
     UNHEX(REPLACE('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7700-8000-000000000001', '-', '')),
     150, 0, 0, 8900.00, NULL
 );
-INSERT INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
+INSERT IGNORE INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
 VALUES (
     UNHEX(REPLACE('b0000001-0001-0001-0001-000000000002', '-', '')),
     UNHEX(REPLACE('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '-', '')),
@@ -249,21 +250,21 @@ VALUES (
 );
 
 -- 3번 수주서 품목 (케이블 + 허브 + 모니터)
-INSERT INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
+INSERT IGNORE INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
 VALUES (
     UNHEX(REPLACE('c0000001-0001-0001-0001-000000000001', '-', '')),
     UNHEX(REPLACE('cccccccc-cccc-cccc-cccc-cccccccccccc', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7700-8000-000000000001', '-', '')),
     200, 0, 0, 8900.00, NULL
 );
-INSERT INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
+INSERT IGNORE INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
 VALUES (
     UNHEX(REPLACE('c0000001-0001-0001-0001-000000000002', '-', '')),
     UNHEX(REPLACE('cccccccc-cccc-cccc-cccc-cccccccccccc', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7700-8000-000000000002', '-', '')),
     60, 0, 0, 15900.00, NULL
 );
-INSERT INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
+INSERT IGNORE INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
 VALUES (
     UNHEX(REPLACE('c0000001-0001-0001-0001-000000000003', '-', '')),
     UNHEX(REPLACE('cccccccc-cccc-cccc-cccc-cccccccccccc', '-', '')),
@@ -272,14 +273,14 @@ VALUES (
 );
 
 -- 4번 수주서 품목 (허브 + 마우스)
-INSERT INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
+INSERT IGNORE INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
 VALUES (
     UNHEX(REPLACE('d0000001-0001-0001-0001-000000000001', '-', '')),
     UNHEX(REPLACE('dddddddd-dddd-dddd-dddd-dddddddddddd', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7700-8000-000000000002', '-', '')),
     120, 0, 0, 15900.00, NULL
 );
-INSERT INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
+INSERT IGNORE INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
 VALUES (
     UNHEX(REPLACE('d0000001-0001-0001-0001-000000000002', '-', '')),
     UNHEX(REPLACE('dddddddd-dddd-dddd-dddd-dddddddddddd', '-', '')),
@@ -288,21 +289,21 @@ VALUES (
 );
 
 -- 5번 수주서 품목 (케이블 + 허브 + 모니터)
-INSERT INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
+INSERT IGNORE INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
 VALUES (
     UNHEX(REPLACE('e0000001-0001-0001-0001-000000000001', '-', '')),
     UNHEX(REPLACE('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7700-8000-000000000001', '-', '')),
     180, 0, 0, 8900.00, NULL
 );
-INSERT INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
+INSERT IGNORE INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
 VALUES (
     UNHEX(REPLACE('e0000001-0001-0001-0001-000000000002', '-', '')),
     UNHEX(REPLACE('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7700-8000-000000000002', '-', '')),
     90, 0, 0, 15900.00, NULL
 );
-INSERT INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
+INSERT IGNORE INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
 VALUES (
     UNHEX(REPLACE('e0000001-0001-0001-0001-000000000003', '-', '')),
     UNHEX(REPLACE('eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', '-', '')),
@@ -311,14 +312,14 @@ VALUES (
 );
 
 -- 6번 수주서 품목 (케이블 + 키보드)
-INSERT INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
+INSERT IGNORE INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
 VALUES (
     UNHEX(REPLACE('f0000001-0001-0001-0001-000000000001', '-', '')),
     UNHEX(REPLACE('ffffffff-ffff-ffff-ffff-ffffffffffff', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7700-8000-000000000001', '-', '')),
     70, 0, 0, 8900.00, NULL
 );
-INSERT INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
+INSERT IGNORE INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
 VALUES (
     UNHEX(REPLACE('f0000001-0001-0001-0001-000000000002', '-', '')),
     UNHEX(REPLACE('ffffffff-ffff-ffff-ffff-ffffffffffff', '-', '')),
@@ -327,21 +328,21 @@ VALUES (
 );
 
 -- 7번 수주서 품목 (케이블 + 허브 + 마우스)
-INSERT INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
+INSERT IGNORE INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
 VALUES (
     UNHEX(REPLACE('10000001-0001-0001-0001-000000000001', '-', '')),
     UNHEX(REPLACE('11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7700-8000-000000000001', '-', '')),
     130, 0, 0, 8900.00, NULL
 );
-INSERT INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
+INSERT IGNORE INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
 VALUES (
     UNHEX(REPLACE('10000001-0001-0001-0001-000000000002', '-', '')),
     UNHEX(REPLACE('11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7700-8000-000000000002', '-', '')),
     50, 0, 0, 15900.00, NULL
 );
-INSERT INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
+INSERT IGNORE INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
 VALUES (
     UNHEX(REPLACE('10000001-0001-0001-0001-000000000003', '-', '')),
     UNHEX(REPLACE('11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '-', '')),
@@ -350,14 +351,14 @@ VALUES (
 );
 
 -- 8번 수주서 품목 (케이블 + 키보드)
-INSERT INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
+INSERT IGNORE INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
 VALUES (
     UNHEX(REPLACE('20000001-0001-0001-0001-000000000001', '-', '')),
     UNHEX(REPLACE('22222222-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7700-8000-000000000001', '-', '')),
     60, 0, 0, 8900.00, NULL
 );
-INSERT INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
+INSERT IGNORE INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
 VALUES (
     UNHEX(REPLACE('20000001-0001-0001-0001-000000000002', '-', '')),
     UNHEX(REPLACE('22222222-bbbb-bbbb-bbbb-bbbbbbbbbbbb', '-', '')),
@@ -366,21 +367,21 @@ VALUES (
 );
 
 -- 9번 수주서 품목 (케이블 + 허브 + 모니터)
-INSERT INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
+INSERT IGNORE INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
 VALUES (
     UNHEX(REPLACE('30000001-0001-0001-0001-000000000001', '-', '')),
     UNHEX(REPLACE('33333333-cccc-cccc-cccc-cccccccccccc', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7700-8000-000000000001', '-', '')),
     110, 0, 0, 8900.00, NULL
 );
-INSERT INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
+INSERT IGNORE INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
 VALUES (
     UNHEX(REPLACE('30000001-0001-0001-0001-000000000002', '-', '')),
     UNHEX(REPLACE('33333333-cccc-cccc-cccc-cccccccccccc', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7700-8000-000000000002', '-', '')),
     70, 0, 0, 15900.00, NULL
 );
-INSERT INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
+INSERT IGNORE INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
 VALUES (
     UNHEX(REPLACE('30000001-0001-0001-0001-000000000003', '-', '')),
     UNHEX(REPLACE('33333333-cccc-cccc-cccc-cccccccccccc', '-', '')),
@@ -389,14 +390,14 @@ VALUES (
 );
 
 -- 10번 수주서 품목 (마우스 + 모니터)
-INSERT INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
+INSERT IGNORE INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
 VALUES (
     UNHEX(REPLACE('40000001-0001-0001-0001-000000000001', '-', '')),
     UNHEX(REPLACE('44444444-dddd-dddd-dddd-dddddddddddd', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7700-8000-000000000004', '-', '')),
     85, 0, 0, 25900.00, NULL
 );
-INSERT INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
+INSERT IGNORE INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note)
 VALUES (
     UNHEX(REPLACE('40000001-0001-0001-0001-000000000002', '-', '')),
     UNHEX(REPLACE('44444444-dddd-dddd-dddd-dddddddddddd', '-', '')),
@@ -411,7 +412,7 @@ VALUES (
 -- =============================================
 
 -- 1번 발주서 (LogiX, USB-C 케이블 + USB 허브)
-INSERT INTO erp_purchase_orders (id, client_id, supplier_id, po_no, status, order_date, scheduled_date, note, created_at)
+INSERT IGNORE INTO erp_purchase_orders (id, client_id, supplier_id, po_no, status, order_date, scheduled_date, note, created_at)
 VALUES (
     UNHEX(REPLACE('aa000001-0001-0001-0001-000000000001', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001', '-', '')),
@@ -420,7 +421,7 @@ VALUES (
 );
 
 -- 2번 발주서 (LogiX, USB 허브)
-INSERT INTO erp_purchase_orders (id, client_id, supplier_id, po_no, status, order_date, scheduled_date, note, created_at)
+INSERT IGNORE INTO erp_purchase_orders (id, client_id, supplier_id, po_no, status, order_date, scheduled_date, note, created_at)
 VALUES (
     UNHEX(REPLACE('aa000001-0001-0001-0001-000000000002', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001', '-', '')),
@@ -429,7 +430,7 @@ VALUES (
 );
 
 -- 3번 발주서 (TechSupply, 키보드 + 마우스)
-INSERT INTO erp_purchase_orders (id, client_id, supplier_id, po_no, status, order_date, scheduled_date, note, created_at)
+INSERT IGNORE INTO erp_purchase_orders (id, client_id, supplier_id, po_no, status, order_date, scheduled_date, note, created_at)
 VALUES (
     UNHEX(REPLACE('aa000001-0001-0001-0001-000000000003', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001', '-', '')),
@@ -438,7 +439,7 @@ VALUES (
 );
 
 -- 4번 발주서 (TechSupply, 마우스)
-INSERT INTO erp_purchase_orders (id, client_id, supplier_id, po_no, status, order_date, scheduled_date, note, created_at)
+INSERT IGNORE INTO erp_purchase_orders (id, client_id, supplier_id, po_no, status, order_date, scheduled_date, note, created_at)
 VALUES (
     UNHEX(REPLACE('aa000001-0001-0001-0001-000000000004', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001', '-', '')),
@@ -447,7 +448,7 @@ VALUES (
 );
 
 -- 5번 발주서 (자사, 모니터)
-INSERT INTO erp_purchase_orders (id, client_id, supplier_id, po_no, status, order_date, scheduled_date, note, created_at)
+INSERT IGNORE INTO erp_purchase_orders (id, client_id, supplier_id, po_no, status, order_date, scheduled_date, note, created_at)
 VALUES (
     UNHEX(REPLACE('aa000001-0001-0001-0001-000000000005', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001', '-', '')),
@@ -460,14 +461,14 @@ VALUES (
 -- =============================================
 
 -- 1번 발주서 품목 (USB-C 케이블 200개 + USB 허브 100개)
-INSERT INTO erp_purchase_order_items (id, purchase_order_id, product_id, qty, unit_price, note)
+INSERT IGNORE INTO erp_purchase_order_items (id, purchase_order_id, product_id, qty, unit_price, note)
 VALUES (
     UNHEX(REPLACE('ab000001-0001-0001-0001-000000000001', '-', '')),
     UNHEX(REPLACE('aa000001-0001-0001-0001-000000000001', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7700-8000-000000000001', '-', '')),
     200, 8900.00, NULL
 );
-INSERT INTO erp_purchase_order_items (id, purchase_order_id, product_id, qty, unit_price, note)
+INSERT IGNORE INTO erp_purchase_order_items (id, purchase_order_id, product_id, qty, unit_price, note)
 VALUES (
     UNHEX(REPLACE('ab000001-0001-0001-0001-000000000002', '-', '')),
     UNHEX(REPLACE('aa000001-0001-0001-0001-000000000001', '-', '')),
@@ -476,7 +477,7 @@ VALUES (
 );
 
 -- 2번 발주서 품목 (USB 허브 150개)
-INSERT INTO erp_purchase_order_items (id, purchase_order_id, product_id, qty, unit_price, note)
+INSERT IGNORE INTO erp_purchase_order_items (id, purchase_order_id, product_id, qty, unit_price, note)
 VALUES (
     UNHEX(REPLACE('ab000001-0001-0001-0001-000000000003', '-', '')),
     UNHEX(REPLACE('aa000001-0001-0001-0001-000000000002', '-', '')),
@@ -485,14 +486,14 @@ VALUES (
 );
 
 -- 3번 발주서 품목 (키보드 80개 + 마우스 120개)
-INSERT INTO erp_purchase_order_items (id, purchase_order_id, product_id, qty, unit_price, note)
+INSERT IGNORE INTO erp_purchase_order_items (id, purchase_order_id, product_id, qty, unit_price, note)
 VALUES (
     UNHEX(REPLACE('ab000001-0001-0001-0001-000000000004', '-', '')),
     UNHEX(REPLACE('aa000001-0001-0001-0001-000000000003', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7700-8000-000000000003', '-', '')),
     80, 89000.00, NULL
 );
-INSERT INTO erp_purchase_order_items (id, purchase_order_id, product_id, qty, unit_price, note)
+INSERT IGNORE INTO erp_purchase_order_items (id, purchase_order_id, product_id, qty, unit_price, note)
 VALUES (
     UNHEX(REPLACE('ab000001-0001-0001-0001-000000000005', '-', '')),
     UNHEX(REPLACE('aa000001-0001-0001-0001-000000000003', '-', '')),
@@ -501,7 +502,7 @@ VALUES (
 );
 
 -- 4번 발주서 품목 (마우스 200개)
-INSERT INTO erp_purchase_order_items (id, purchase_order_id, product_id, qty, unit_price, note)
+INSERT IGNORE INTO erp_purchase_order_items (id, purchase_order_id, product_id, qty, unit_price, note)
 VALUES (
     UNHEX(REPLACE('ab000001-0001-0001-0001-000000000006', '-', '')),
     UNHEX(REPLACE('aa000001-0001-0001-0001-000000000004', '-', '')),
@@ -510,7 +511,7 @@ VALUES (
 );
 
 -- 5번 발주서 품목 (모니터 30개)
-INSERT INTO erp_purchase_order_items (id, purchase_order_id, product_id, qty, unit_price, note)
+INSERT IGNORE INTO erp_purchase_order_items (id, purchase_order_id, product_id, qty, unit_price, note)
 VALUES (
     UNHEX(REPLACE('ab000001-0001-0001-0001-000000000007', '-', '')),
     UNHEX(REPLACE('aa000001-0001-0001-0001-000000000005', '-', '')),
@@ -523,7 +524,7 @@ VALUES (
 -- =============================================
 
 -- 6번 발주서 (LogiX, USB-C 케이블)
-INSERT INTO erp_purchase_orders (id, client_id, supplier_id, po_no, status, order_date, scheduled_date, note, created_at)
+INSERT IGNORE INTO erp_purchase_orders (id, client_id, supplier_id, po_no, status, order_date, scheduled_date, note, created_at)
 VALUES (
     UNHEX(REPLACE('aa000001-0001-0001-0001-000000000006', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001', '-', '')),
@@ -532,7 +533,7 @@ VALUES (
 );
 
 -- 7번 발주서 (LogiX, USB 허브)
-INSERT INTO erp_purchase_orders (id, client_id, supplier_id, po_no, status, order_date, scheduled_date, note, created_at)
+INSERT IGNORE INTO erp_purchase_orders (id, client_id, supplier_id, po_no, status, order_date, scheduled_date, note, created_at)
 VALUES (
     UNHEX(REPLACE('aa000001-0001-0001-0001-000000000007', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001', '-', '')),
@@ -541,7 +542,7 @@ VALUES (
 );
 
 -- 8번 발주서 (TechSupply, 키보드 + 마우스)
-INSERT INTO erp_purchase_orders (id, client_id, supplier_id, po_no, status, order_date, scheduled_date, note, created_at)
+INSERT IGNORE INTO erp_purchase_orders (id, client_id, supplier_id, po_no, status, order_date, scheduled_date, note, created_at)
 VALUES (
     UNHEX(REPLACE('aa000001-0001-0001-0001-000000000008', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001', '-', '')),
@@ -550,7 +551,7 @@ VALUES (
 );
 
 -- 9번 발주서 (TechSupply, 마우스)
-INSERT INTO erp_purchase_orders (id, client_id, supplier_id, po_no, status, order_date, scheduled_date, note, created_at)
+INSERT IGNORE INTO erp_purchase_orders (id, client_id, supplier_id, po_no, status, order_date, scheduled_date, note, created_at)
 VALUES (
     UNHEX(REPLACE('aa000001-0001-0001-0001-000000000009', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001', '-', '')),
@@ -559,7 +560,7 @@ VALUES (
 );
 
 -- 10번 발주서 (자사, 모니터)
-INSERT INTO erp_purchase_orders (id, client_id, supplier_id, po_no, status, order_date, scheduled_date, note, created_at)
+INSERT IGNORE INTO erp_purchase_orders (id, client_id, supplier_id, po_no, status, order_date, scheduled_date, note, created_at)
 VALUES (
     UNHEX(REPLACE('aa000001-0001-0001-0001-000000000010', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001', '-', '')),
@@ -568,7 +569,7 @@ VALUES (
 );
 
 -- 11번 발주서 (LogiX, USB-C 케이블 + USB 허브)
-INSERT INTO erp_purchase_orders (id, client_id, supplier_id, po_no, status, order_date, scheduled_date, note, created_at)
+INSERT IGNORE INTO erp_purchase_orders (id, client_id, supplier_id, po_no, status, order_date, scheduled_date, note, created_at)
 VALUES (
     UNHEX(REPLACE('aa000001-0001-0001-0001-000000000011', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001', '-', '')),
@@ -577,7 +578,7 @@ VALUES (
 );
 
 -- 12번 발주서 (TechSupply, 키보드)
-INSERT INTO erp_purchase_orders (id, client_id, supplier_id, po_no, status, order_date, scheduled_date, note, created_at)
+INSERT IGNORE INTO erp_purchase_orders (id, client_id, supplier_id, po_no, status, order_date, scheduled_date, note, created_at)
 VALUES (
     UNHEX(REPLACE('aa000001-0001-0001-0001-000000000012', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001', '-', '')),
@@ -586,7 +587,7 @@ VALUES (
 );
 
 -- 13번 발주서 (자사, 모니터)
-INSERT INTO erp_purchase_orders (id, client_id, supplier_id, po_no, status, order_date, scheduled_date, note, created_at)
+INSERT IGNORE INTO erp_purchase_orders (id, client_id, supplier_id, po_no, status, order_date, scheduled_date, note, created_at)
 VALUES (
     UNHEX(REPLACE('aa000001-0001-0001-0001-000000000013', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001', '-', '')),
@@ -595,7 +596,7 @@ VALUES (
 );
 
 -- 14번 발주서 (LogiX, USB 허브)
-INSERT INTO erp_purchase_orders (id, client_id, supplier_id, po_no, status, order_date, scheduled_date, note, created_at)
+INSERT IGNORE INTO erp_purchase_orders (id, client_id, supplier_id, po_no, status, order_date, scheduled_date, note, created_at)
 VALUES (
     UNHEX(REPLACE('aa000001-0001-0001-0001-000000000014', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001', '-', '')),
@@ -604,7 +605,7 @@ VALUES (
 );
 
 -- 15번 발주서 (TechSupply, 키보드 + 마우스)
-INSERT INTO erp_purchase_orders (id, client_id, supplier_id, po_no, status, order_date, scheduled_date, note, created_at)
+INSERT IGNORE INTO erp_purchase_orders (id, client_id, supplier_id, po_no, status, order_date, scheduled_date, note, created_at)
 VALUES (
     UNHEX(REPLACE('aa000001-0001-0001-0001-000000000015', '-', '')),
     UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001', '-', '')),
@@ -617,45 +618,45 @@ VALUES (
 -- =============================================
 
 -- 6번 (케이블 400)
-INSERT INTO erp_purchase_order_items (id, purchase_order_id, product_id, qty, unit_price, note) VALUES
+INSERT IGNORE INTO erp_purchase_order_items (id, purchase_order_id, product_id, qty, unit_price, note) VALUES
 (UNHEX(REPLACE('ab000001-0001-0001-0001-000000000008','-','')), UNHEX(REPLACE('aa000001-0001-0001-0001-000000000006','-','')), UNHEX(REPLACE('01935c00-0000-7700-8000-000000000001','-','')), 400, 8900.00, NULL);
 
 -- 7번 (허브 250)
-INSERT INTO erp_purchase_order_items (id, purchase_order_id, product_id, qty, unit_price, note) VALUES
+INSERT IGNORE INTO erp_purchase_order_items (id, purchase_order_id, product_id, qty, unit_price, note) VALUES
 (UNHEX(REPLACE('ab000001-0001-0001-0001-000000000009','-','')), UNHEX(REPLACE('aa000001-0001-0001-0001-000000000007','-','')), UNHEX(REPLACE('01935c00-0000-7700-8000-000000000002','-','')), 250, 15900.00, NULL);
 
 -- 8번 (키보드 150 + 마우스 200)
-INSERT INTO erp_purchase_order_items (id, purchase_order_id, product_id, qty, unit_price, note) VALUES
+INSERT IGNORE INTO erp_purchase_order_items (id, purchase_order_id, product_id, qty, unit_price, note) VALUES
 (UNHEX(REPLACE('ab000001-0001-0001-0001-000000000010','-','')), UNHEX(REPLACE('aa000001-0001-0001-0001-000000000008','-','')), UNHEX(REPLACE('01935c00-0000-7700-8000-000000000003','-','')), 150, 89000.00, NULL),
 (UNHEX(REPLACE('ab000001-0001-0001-0001-000000000011','-','')), UNHEX(REPLACE('aa000001-0001-0001-0001-000000000008','-','')), UNHEX(REPLACE('01935c00-0000-7700-8000-000000000004','-','')), 200, 25900.00, NULL);
 
 -- 9번 (마우스 300)
-INSERT INTO erp_purchase_order_items (id, purchase_order_id, product_id, qty, unit_price, note) VALUES
+INSERT IGNORE INTO erp_purchase_order_items (id, purchase_order_id, product_id, qty, unit_price, note) VALUES
 (UNHEX(REPLACE('ab000001-0001-0001-0001-000000000012','-','')), UNHEX(REPLACE('aa000001-0001-0001-0001-000000000009','-','')), UNHEX(REPLACE('01935c00-0000-7700-8000-000000000004','-','')), 300, 25900.00, NULL);
 
 -- 10번 (모니터 40)
-INSERT INTO erp_purchase_order_items (id, purchase_order_id, product_id, qty, unit_price, note) VALUES
+INSERT IGNORE INTO erp_purchase_order_items (id, purchase_order_id, product_id, qty, unit_price, note) VALUES
 (UNHEX(REPLACE('ab000001-0001-0001-0001-000000000013','-','')), UNHEX(REPLACE('aa000001-0001-0001-0001-000000000010','-','')), UNHEX(REPLACE('01935c00-0000-7700-8000-000000000005','-','')), 40, 350000.00, NULL);
 
 -- 11번 (케이블 600 + 허브 350)
-INSERT INTO erp_purchase_order_items (id, purchase_order_id, product_id, qty, unit_price, note) VALUES
+INSERT IGNORE INTO erp_purchase_order_items (id, purchase_order_id, product_id, qty, unit_price, note) VALUES
 (UNHEX(REPLACE('ab000001-0001-0001-0001-000000000014','-','')), UNHEX(REPLACE('aa000001-0001-0001-0001-000000000011','-','')), UNHEX(REPLACE('01935c00-0000-7700-8000-000000000001','-','')), 600, 8900.00, NULL),
 (UNHEX(REPLACE('ab000001-0001-0001-0001-000000000015','-','')), UNHEX(REPLACE('aa000001-0001-0001-0001-000000000011','-','')), UNHEX(REPLACE('01935c00-0000-7700-8000-000000000002','-','')), 350, 15900.00, NULL);
 
 -- 12번 (키보드 200)
-INSERT INTO erp_purchase_order_items (id, purchase_order_id, product_id, qty, unit_price, note) VALUES
+INSERT IGNORE INTO erp_purchase_order_items (id, purchase_order_id, product_id, qty, unit_price, note) VALUES
 (UNHEX(REPLACE('ab000001-0001-0001-0001-000000000016','-','')), UNHEX(REPLACE('aa000001-0001-0001-0001-000000000012','-','')), UNHEX(REPLACE('01935c00-0000-7700-8000-000000000003','-','')), 200, 89000.00, NULL);
 
 -- 13번 (모니터 70)
-INSERT INTO erp_purchase_order_items (id, purchase_order_id, product_id, qty, unit_price, note) VALUES
+INSERT IGNORE INTO erp_purchase_order_items (id, purchase_order_id, product_id, qty, unit_price, note) VALUES
 (UNHEX(REPLACE('ab000001-0001-0001-0001-000000000017','-','')), UNHEX(REPLACE('aa000001-0001-0001-0001-000000000013','-','')), UNHEX(REPLACE('01935c00-0000-7700-8000-000000000005','-','')), 70, 350000.00, NULL);
 
 -- 14번 (허브 450)
-INSERT INTO erp_purchase_order_items (id, purchase_order_id, product_id, qty, unit_price, note) VALUES
+INSERT IGNORE INTO erp_purchase_order_items (id, purchase_order_id, product_id, qty, unit_price, note) VALUES
 (UNHEX(REPLACE('ab000001-0001-0001-0001-000000000018','-','')), UNHEX(REPLACE('aa000001-0001-0001-0001-000000000014','-','')), UNHEX(REPLACE('01935c00-0000-7700-8000-000000000002','-','')), 450, 15900.00, NULL);
 
 -- 15번 (키보드 100 + 마우스 180)
-INSERT INTO erp_purchase_order_items (id, purchase_order_id, product_id, qty, unit_price, note) VALUES
+INSERT IGNORE INTO erp_purchase_order_items (id, purchase_order_id, product_id, qty, unit_price, note) VALUES
 (UNHEX(REPLACE('ab000001-0001-0001-0001-000000000019','-','')), UNHEX(REPLACE('aa000001-0001-0001-0001-000000000015','-','')), UNHEX(REPLACE('01935c00-0000-7700-8000-000000000003','-','')), 100, 89000.00, NULL),
 (UNHEX(REPLACE('ab000001-0001-0001-0001-000000000020','-','')), UNHEX(REPLACE('aa000001-0001-0001-0001-000000000015','-','')), UNHEX(REPLACE('01935c00-0000-7700-8000-000000000004','-','')), 180, 25900.00, NULL);
 
@@ -665,7 +666,7 @@ INSERT INTO erp_purchase_order_items (id, purchase_order_id, product_id, qty, un
 -- =============================================
 
 -- 11번 수주서 (강남지점)
-INSERT INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
+INSERT IGNORE INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
 VALUES (UNHEX(REPLACE('50000000-0001-0001-0001-000000000011','-','')),
     UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001','-','')),
     UNHEX(REPLACE('01935c00-0000-7600-8000-000000000001','-','')),
@@ -673,7 +674,7 @@ VALUES (UNHEX(REPLACE('50000000-0001-0001-0001-000000000011','-','')),
     '서울시 강남구 역삼로 111', NULL, NOW());
 
 -- 12번 수주서 (강남지점)
-INSERT INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
+INSERT IGNORE INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
 VALUES (UNHEX(REPLACE('50000000-0001-0001-0001-000000000012','-','')),
     UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001','-','')),
     UNHEX(REPLACE('01935c00-0000-7600-8000-000000000001','-','')),
@@ -681,7 +682,7 @@ VALUES (UNHEX(REPLACE('50000000-0001-0001-0001-000000000012','-','')),
     '서울시 서초구 강남대로 222', NULL, NOW());
 
 -- 13번 수주서 (강남지점)
-INSERT INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
+INSERT IGNORE INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
 VALUES (UNHEX(REPLACE('50000000-0001-0001-0001-000000000013','-','')),
     UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001','-','')),
     UNHEX(REPLACE('01935c00-0000-7600-8000-000000000001','-','')),
@@ -689,7 +690,7 @@ VALUES (UNHEX(REPLACE('50000000-0001-0001-0001-000000000013','-','')),
     '서울시 송파구 잠실로 333', NULL, NOW());
 
 -- 14번 수주서 (강남지점)
-INSERT INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
+INSERT IGNORE INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
 VALUES (UNHEX(REPLACE('50000000-0001-0001-0001-000000000014','-','')),
     UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001','-','')),
     UNHEX(REPLACE('01935c00-0000-7600-8000-000000000001','-','')),
@@ -697,7 +698,7 @@ VALUES (UNHEX(REPLACE('50000000-0001-0001-0001-000000000014','-','')),
     '서울시 영등포구 여의대로 444', NULL, NOW());
 
 -- 15번 수주서 (강남지점)
-INSERT INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
+INSERT IGNORE INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
 VALUES (UNHEX(REPLACE('50000000-0001-0001-0001-000000000015','-','')),
     UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001','-','')),
     UNHEX(REPLACE('01935c00-0000-7600-8000-000000000001','-','')),
@@ -705,7 +706,7 @@ VALUES (UNHEX(REPLACE('50000000-0001-0001-0001-000000000015','-','')),
     '서울시 중구 을지로 555', NULL, NOW());
 
 -- 16번 수주서 (부산지점)
-INSERT INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
+INSERT IGNORE INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
 VALUES (UNHEX(REPLACE('50000000-0001-0001-0001-000000000016','-','')),
     UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001','-','')),
     UNHEX(REPLACE('01935c00-0000-7600-8000-000000000002','-','')),
@@ -713,7 +714,7 @@ VALUES (UNHEX(REPLACE('50000000-0001-0001-0001-000000000016','-','')),
     '부산시 해운대구 센텀로 666', NULL, NOW());
 
 -- 17번 수주서 (부산지점)
-INSERT INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
+INSERT IGNORE INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
 VALUES (UNHEX(REPLACE('50000000-0001-0001-0001-000000000017','-','')),
     UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001','-','')),
     UNHEX(REPLACE('01935c00-0000-7600-8000-000000000002','-','')),
@@ -721,7 +722,7 @@ VALUES (UNHEX(REPLACE('50000000-0001-0001-0001-000000000017','-','')),
     '부산시 부산진구 중앙대로 777', NULL, NOW());
 
 -- 18번 수주서 (부산지점)
-INSERT INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
+INSERT IGNORE INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
 VALUES (UNHEX(REPLACE('50000000-0001-0001-0001-000000000018','-','')),
     UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001','-','')),
     UNHEX(REPLACE('01935c00-0000-7600-8000-000000000002','-','')),
@@ -729,7 +730,7 @@ VALUES (UNHEX(REPLACE('50000000-0001-0001-0001-000000000018','-','')),
     '부산시 동래구 명륜로 888', NULL, NOW());
 
 -- 19번 수주서 (부산지점)
-INSERT INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
+INSERT IGNORE INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
 VALUES (UNHEX(REPLACE('50000000-0001-0001-0001-000000000019','-','')),
     UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001','-','')),
     UNHEX(REPLACE('01935c00-0000-7600-8000-000000000002','-','')),
@@ -737,7 +738,7 @@ VALUES (UNHEX(REPLACE('50000000-0001-0001-0001-000000000019','-','')),
     '부산시 남구 수영로 999', NULL, NOW());
 
 -- 20번 수주서 (부산지점)
-INSERT INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
+INSERT IGNORE INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
 VALUES (UNHEX(REPLACE('50000000-0001-0001-0001-000000000020','-','')),
     UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001','-','')),
     UNHEX(REPLACE('01935c00-0000-7600-8000-000000000002','-','')),
@@ -745,7 +746,7 @@ VALUES (UNHEX(REPLACE('50000000-0001-0001-0001-000000000020','-','')),
     '부산시 금정구 범어사로 1010', NULL, NOW());
 
 -- 21번 수주서 (강남지점)
-INSERT INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
+INSERT IGNORE INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
 VALUES (UNHEX(REPLACE('50000000-0001-0001-0001-000000000021','-','')),
     UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001','-','')),
     UNHEX(REPLACE('01935c00-0000-7600-8000-000000000001','-','')),
@@ -753,7 +754,7 @@ VALUES (UNHEX(REPLACE('50000000-0001-0001-0001-000000000021','-','')),
     '서울시 광진구 능동로 1111', NULL, NOW());
 
 -- 22번 수주서 (강남지점)
-INSERT INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
+INSERT IGNORE INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
 VALUES (UNHEX(REPLACE('50000000-0001-0001-0001-000000000022','-','')),
     UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001','-','')),
     UNHEX(REPLACE('01935c00-0000-7600-8000-000000000001','-','')),
@@ -761,7 +762,7 @@ VALUES (UNHEX(REPLACE('50000000-0001-0001-0001-000000000022','-','')),
     '서울시 강동구 천호대로 1212', NULL, NOW());
 
 -- 23번 수주서 (강남지점)
-INSERT INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
+INSERT IGNORE INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
 VALUES (UNHEX(REPLACE('50000000-0001-0001-0001-000000000023','-','')),
     UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001','-','')),
     UNHEX(REPLACE('01935c00-0000-7600-8000-000000000001','-','')),
@@ -769,7 +770,7 @@ VALUES (UNHEX(REPLACE('50000000-0001-0001-0001-000000000023','-','')),
     '서울시 노원구 동일로 1313', NULL, NOW());
 
 -- 24번 수주서 (강남지점)
-INSERT INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
+INSERT IGNORE INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
 VALUES (UNHEX(REPLACE('50000000-0001-0001-0001-000000000024','-','')),
     UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001','-','')),
     UNHEX(REPLACE('01935c00-0000-7600-8000-000000000001','-','')),
@@ -777,7 +778,7 @@ VALUES (UNHEX(REPLACE('50000000-0001-0001-0001-000000000024','-','')),
     '서울시 성동구 왕십리로 1414', NULL, NOW());
 
 -- 25번 수주서 (강남지점)
-INSERT INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
+INSERT IGNORE INTO erp_sales_orders (id, client_id, store_id, so_no, status, order_date, scheduled_date, shipping_address, note, created_at)
 VALUES (UNHEX(REPLACE('50000000-0001-0001-0001-000000000025','-','')),
     UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001','-','')),
     UNHEX(REPLACE('01935c00-0000-7600-8000-000000000001','-','')),
@@ -789,71 +790,71 @@ VALUES (UNHEX(REPLACE('50000000-0001-0001-0001-000000000025','-','')),
 -- =============================================
 
 -- 11번 (케이블 80 + 허브 40)
-INSERT INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note) VALUES
+INSERT IGNORE INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note) VALUES
 (UNHEX(REPLACE('50000011-0001-0001-0001-000000000001','-','')), UNHEX(REPLACE('50000000-0001-0001-0001-000000000011','-','')), UNHEX(REPLACE('01935c00-0000-7700-8000-000000000001','-','')), 80, 0, 0, 8900.00, NULL),
 (UNHEX(REPLACE('50000011-0001-0001-0001-000000000002','-','')), UNHEX(REPLACE('50000000-0001-0001-0001-000000000011','-','')), UNHEX(REPLACE('01935c00-0000-7700-8000-000000000002','-','')), 40, 0, 0, 15900.00, NULL);
 
 -- 12번 (마우스 100)
-INSERT INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note) VALUES
+INSERT IGNORE INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note) VALUES
 (UNHEX(REPLACE('50000012-0001-0001-0001-000000000001','-','')), UNHEX(REPLACE('50000000-0001-0001-0001-000000000012','-','')), UNHEX(REPLACE('01935c00-0000-7700-8000-000000000004','-','')), 100, 0, 0, 25900.00, NULL);
 
 -- 13번 (키보드 50 + 마우스 60)
-INSERT INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note) VALUES
+INSERT IGNORE INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note) VALUES
 (UNHEX(REPLACE('50000013-0001-0001-0001-000000000001','-','')), UNHEX(REPLACE('50000000-0001-0001-0001-000000000013','-','')), UNHEX(REPLACE('01935c00-0000-7700-8000-000000000003','-','')), 50, 0, 0, 89000.00, NULL),
 (UNHEX(REPLACE('50000013-0001-0001-0001-000000000002','-','')), UNHEX(REPLACE('50000000-0001-0001-0001-000000000013','-','')), UNHEX(REPLACE('01935c00-0000-7700-8000-000000000004','-','')), 60, 0, 0, 25900.00, NULL);
 
 -- 14번 (모니터 12)
-INSERT INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note) VALUES
+INSERT IGNORE INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note) VALUES
 (UNHEX(REPLACE('50000014-0001-0001-0001-000000000001','-','')), UNHEX(REPLACE('50000000-0001-0001-0001-000000000014','-','')), UNHEX(REPLACE('01935c00-0000-7700-8000-000000000005','-','')), 12, 0, 0, 350000.00, NULL);
 
 -- 15번 (허브 70 + 케이블 90)
-INSERT INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note) VALUES
+INSERT IGNORE INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note) VALUES
 (UNHEX(REPLACE('50000015-0001-0001-0001-000000000001','-','')), UNHEX(REPLACE('50000000-0001-0001-0001-000000000015','-','')), UNHEX(REPLACE('01935c00-0000-7700-8000-000000000002','-','')), 70, 0, 0, 15900.00, NULL),
 (UNHEX(REPLACE('50000015-0001-0001-0001-000000000002','-','')), UNHEX(REPLACE('50000000-0001-0001-0001-000000000015','-','')), UNHEX(REPLACE('01935c00-0000-7700-8000-000000000001','-','')), 90, 0, 0, 8900.00, NULL);
 
 -- 16번 (케이블 120 + 허브 60)
-INSERT INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note) VALUES
+INSERT IGNORE INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note) VALUES
 (UNHEX(REPLACE('50000016-0001-0001-0001-000000000001','-','')), UNHEX(REPLACE('50000000-0001-0001-0001-000000000016','-','')), UNHEX(REPLACE('01935c00-0000-7700-8000-000000000001','-','')), 120, 0, 0, 8900.00, NULL),
 (UNHEX(REPLACE('50000016-0001-0001-0001-000000000002','-','')), UNHEX(REPLACE('50000000-0001-0001-0001-000000000016','-','')), UNHEX(REPLACE('01935c00-0000-7700-8000-000000000002','-','')), 60, 0, 0, 15900.00, NULL);
 
 -- 17번 (마우스 140)
-INSERT INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note) VALUES
+INSERT IGNORE INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note) VALUES
 (UNHEX(REPLACE('50000017-0001-0001-0001-000000000001','-','')), UNHEX(REPLACE('50000000-0001-0001-0001-000000000017','-','')), UNHEX(REPLACE('01935c00-0000-7700-8000-000000000004','-','')), 140, 0, 0, 25900.00, NULL);
 
 -- 18번 (키보드 90 + 모니터 18)
-INSERT INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note) VALUES
+INSERT IGNORE INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note) VALUES
 (UNHEX(REPLACE('50000018-0001-0001-0001-000000000001','-','')), UNHEX(REPLACE('50000000-0001-0001-0001-000000000018','-','')), UNHEX(REPLACE('01935c00-0000-7700-8000-000000000003','-','')), 90, 0, 0, 89000.00, NULL),
 (UNHEX(REPLACE('50000018-0001-0001-0001-000000000002','-','')), UNHEX(REPLACE('50000000-0001-0001-0001-000000000018','-','')), UNHEX(REPLACE('01935c00-0000-7700-8000-000000000005','-','')), 18, 0, 0, 350000.00, NULL);
 
 -- 19번 (허브 110)
-INSERT INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note) VALUES
+INSERT IGNORE INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note) VALUES
 (UNHEX(REPLACE('50000019-0001-0001-0001-000000000001','-','')), UNHEX(REPLACE('50000000-0001-0001-0001-000000000019','-','')), UNHEX(REPLACE('01935c00-0000-7700-8000-000000000002','-','')), 110, 0, 0, 15900.00, NULL);
 
 -- 20번 (케이블 220 + 모니터 22)
-INSERT INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note) VALUES
+INSERT IGNORE INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note) VALUES
 (UNHEX(REPLACE('50000020-0001-0001-0001-000000000001','-','')), UNHEX(REPLACE('50000000-0001-0001-0001-000000000020','-','')), UNHEX(REPLACE('01935c00-0000-7700-8000-000000000001','-','')), 220, 0, 0, 8900.00, NULL),
 (UNHEX(REPLACE('50000020-0001-0001-0001-000000000002','-','')), UNHEX(REPLACE('50000000-0001-0001-0001-000000000020','-','')), UNHEX(REPLACE('01935c00-0000-7700-8000-000000000005','-','')), 22, 0, 0, 350000.00, NULL);
 
 -- 21번 (마우스 170)
-INSERT INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note) VALUES
+INSERT IGNORE INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note) VALUES
 (UNHEX(REPLACE('50000021-0001-0001-0001-000000000001','-','')), UNHEX(REPLACE('50000000-0001-0001-0001-000000000021','-','')), UNHEX(REPLACE('01935c00-0000-7700-8000-000000000004','-','')), 170, 0, 0, 25900.00, NULL);
 
 -- 22번 (키보드 120 + 허브 90)
-INSERT INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note) VALUES
+INSERT IGNORE INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note) VALUES
 (UNHEX(REPLACE('50000022-0001-0001-0001-000000000001','-','')), UNHEX(REPLACE('50000000-0001-0001-0001-000000000022','-','')), UNHEX(REPLACE('01935c00-0000-7700-8000-000000000003','-','')), 120, 0, 0, 89000.00, NULL),
 (UNHEX(REPLACE('50000022-0001-0001-0001-000000000002','-','')), UNHEX(REPLACE('50000000-0001-0001-0001-000000000022','-','')), UNHEX(REPLACE('01935c00-0000-7700-8000-000000000002','-','')), 90, 0, 0, 15900.00, NULL);
 
 -- 23번 (모니터 28 + 케이블 170)
-INSERT INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note) VALUES
+INSERT IGNORE INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note) VALUES
 (UNHEX(REPLACE('50000023-0001-0001-0001-000000000001','-','')), UNHEX(REPLACE('50000000-0001-0001-0001-000000000023','-','')), UNHEX(REPLACE('01935c00-0000-7700-8000-000000000005','-','')), 28, 0, 0, 350000.00, NULL),
 (UNHEX(REPLACE('50000023-0001-0001-0001-000000000002','-','')), UNHEX(REPLACE('50000000-0001-0001-0001-000000000023','-','')), UNHEX(REPLACE('01935c00-0000-7700-8000-000000000001','-','')), 170, 0, 0, 8900.00, NULL);
 
 -- 24번 (허브 140)
-INSERT INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note) VALUES
+INSERT IGNORE INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note) VALUES
 (UNHEX(REPLACE('50000024-0001-0001-0001-000000000001','-','')), UNHEX(REPLACE('50000000-0001-0001-0001-000000000024','-','')), UNHEX(REPLACE('01935c00-0000-7700-8000-000000000002','-','')), 140, 0, 0, 15900.00, NULL);
 
 -- 25번 (마우스 220 + 키보드 70)
-INSERT INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note) VALUES
+INSERT IGNORE INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocated_qty, dispatched_qty, unit_price, note) VALUES
 (UNHEX(REPLACE('50000025-0001-0001-0001-000000000001','-','')), UNHEX(REPLACE('50000000-0001-0001-0001-000000000025','-','')), UNHEX(REPLACE('01935c00-0000-7700-8000-000000000004','-','')), 220, 0, 0, 25900.00, NULL),
 (UNHEX(REPLACE('50000025-0001-0001-0001-000000000002','-','')), UNHEX(REPLACE('50000000-0001-0001-0001-000000000025','-','')), UNHEX(REPLACE('01935c00-0000-7700-8000-000000000003','-','')), 70, 0, 0, 89000.00, NULL);
 
@@ -862,7 +863,7 @@ INSERT INTO erp_sales_order_items (id, sales_order_id, product_id, qty, allocate
 -- =============================================
 -- 피킹 자동배정은 작업자의 마지막 창고/구역/로케이션을 참고해 가까운 작업자를 우선 배정한다.
 -- FK 없이 account-service 사용자 UUID 와 master-service 위치 UUID 를 논리 참조한다.
-INSERT INTO worker_last_locations (
+INSERT IGNORE INTO worker_last_locations (
     id,
     client_id,
     user_id,
@@ -945,7 +946,41 @@ ON DUPLICATE KEY UPDATE
 --   client_id = 01935c00-0000-7000-8000-000000000101
 --   user_id   = 01935c00-0000-8000-8000-000000000101
 
-INSERT INTO inventories (
+-- 멀티 클라이언트 재고 제약 보정:
+-- 같은 물리 위치라도 client가 다르면 별도 재고 row를 가질 수 있어야 한다.
+SET @old_inventory_idx_exists := (
+    SELECT COUNT(*)
+    FROM information_schema.statistics
+    WHERE table_schema = DATABASE()
+      AND table_name = 'inventories'
+      AND index_name = 'uk_inventory_warehouse_location'
+);
+SET @drop_inventory_idx_sql := IF(
+    @old_inventory_idx_exists > 0,
+    'ALTER TABLE inventories DROP INDEX uk_inventory_warehouse_location',
+    'SELECT 1'
+);
+PREPARE drop_inventory_idx_stmt FROM @drop_inventory_idx_sql;
+EXECUTE drop_inventory_idx_stmt;
+DEALLOCATE PREPARE drop_inventory_idx_stmt;
+
+SET @new_inventory_idx_exists := (
+    SELECT COUNT(*)
+    FROM information_schema.statistics
+    WHERE table_schema = DATABASE()
+      AND table_name = 'inventories'
+      AND index_name = 'uk_inventory_client_warehouse_location'
+);
+SET @add_inventory_idx_sql := IF(
+    @new_inventory_idx_exists = 0,
+    'ALTER TABLE inventories ADD UNIQUE KEY uk_inventory_client_warehouse_location (client_id, warehouse_id, location_id)',
+    'SELECT 1'
+);
+PREPARE add_inventory_idx_stmt FROM @add_inventory_idx_sql;
+EXECUTE add_inventory_idx_stmt;
+DEALLOCATE PREPARE add_inventory_idx_stmt;
+
+INSERT IGNORE INTO inventories (
     id,
     client_id,
     product_id,
@@ -1000,21 +1035,25 @@ INSERT INTO inventories (
  UNHEX(REPLACE('01935c00-0000-7700-8000-00000000001a','-','')),
  UNHEX(REPLACE('01935c00-0000-7100-8000-000000000001','-','')),
  UNHEX(REPLACE('01935c00-0000-7400-8000-000000000025','-','')),
- 34, 6, 0, 0, 0, 40, NOW())
+ 34, 6, 0, 0, 0, 40, NOW()),
+-- 기계식 키보드: 관리자 기본 클라이언트 적치 완료 재고 현황 테스트
+(UNHEX(REPLACE('01935c00-0000-9100-8000-000000000008','-','')),
+ UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001','-','')),
+ UNHEX(REPLACE('01935c00-0000-7700-8000-000000000003','-','')),
+ UNHEX(REPLACE('01935c00-0000-7100-8000-000000000001','-','')),
+ UNHEX(REPLACE('01935c00-0000-7400-8000-000000000007','-','')),
+ 80, 0, 0, 0, 0, 80, NOW()),
+-- 무선 마우스: 관리자 기본 클라이언트 적치 완료 재고 현황 테스트
+(UNHEX(REPLACE('01935c00-0000-9100-8000-000000000007','-','')),
+ UNHEX(REPLACE('01935c00-0000-7000-8000-000000000001','-','')),
+ UNHEX(REPLACE('01935c00-0000-7700-8000-000000000004','-','')),
+ UNHEX(REPLACE('01935c00-0000-7100-8000-000000000001','-','')),
+ UNHEX(REPLACE('01935c00-0000-7400-8000-000000000008','-','')),
+ 320, 0, 0, 0, 0, 320, NOW())
 ON DUPLICATE KEY UPDATE
-    client_id = VALUES(client_id),
-    product_id = VALUES(product_id),
-    warehouse_id = VALUES(warehouse_id),
-    location_id = VALUES(location_id),
-    available_qty = VALUES(available_qty),
-    reserved_qty = VALUES(reserved_qty),
-    defect_qty = VALUES(defect_qty),
-    incoming_qty = VALUES(incoming_qty),
-    pending_qty = VALUES(pending_qty),
-    total_qty = VALUES(total_qty),
-    updated_at = VALUES(updated_at);
+    id = id;
 
-INSERT INTO inbound_orders (
+INSERT IGNORE INTO inbound_orders (
     id,
     client_id,
     warehouse_id,
@@ -1089,7 +1128,7 @@ ON DUPLICATE KEY UPDATE
     note = VALUES(note),
     updated_at = VALUES(updated_at);
 
-INSERT INTO inbound_order_items (
+INSERT IGNORE INTO inbound_order_items (
     id,
     inbound_order_id,
     product_id,
@@ -1118,7 +1157,7 @@ ON DUPLICATE KEY UPDATE
     status = VALUES(status),
     unit_price = VALUES(unit_price);
 
-INSERT INTO outbound_orders (
+INSERT IGNORE INTO outbound_orders (
     id,
     order_no,
     client_id,
@@ -1213,7 +1252,7 @@ ON DUPLICATE KEY UPDATE
     note = VALUES(note),
     updated_at = VALUES(updated_at);
 
-INSERT INTO outbound_order_items (
+INSERT IGNORE INTO outbound_order_items (
     id,
     outbound_orders_id,
     product_id,
@@ -1244,7 +1283,7 @@ ON DUPLICATE KEY UPDATE
     unit_price = VALUES(unit_price),
     status = VALUES(status);
 
-INSERT INTO picking_lists (
+INSERT IGNORE INTO picking_lists (
     id,
     client_id,
     picking_no,
@@ -1283,7 +1322,7 @@ ON DUPLICATE KEY UPDATE
     completed_at = VALUES(completed_at),
     created_at = VALUES(created_at);
 
-INSERT INTO picking_list_items (
+INSERT IGNORE INTO picking_list_items (
     id,
     picking_list_id,
     outbound_order_item_id,
@@ -1318,3 +1357,34 @@ ON DUPLICATE KEY UPDATE
     status = VALUES(status),
     picked_by = VALUES(picked_by),
     picked_at = VALUES(picked_at);
+
+-- 자동 배정 도입 전 만들어진 활성 업무도 챗봇 시연에서 담당자를 확인할 수 있게 보정합니다.
+UPDATE inbound_orders
+SET assigned_to = UNHEX(REPLACE('01935c00-0000-7200-8000-000000000001','-',''))
+WHERE assigned_to IS NULL
+  AND status IN ('approved', 'received', 'placing', 'partial');
+
+UPDATE placement_orders
+SET assigned_to = UNHEX(REPLACE('01935c00-0000-7200-8000-000000000004','-',''))
+WHERE assigned_to IS NULL
+  AND status IN ('pending', 'in_progress');
+
+UPDATE outbound_orders
+SET assigned_to = UNHEX(REPLACE('01935c00-0000-7200-8000-000000000006','-',''))
+WHERE assigned_to IS NULL
+  AND status IN ('approved', 'in_progress', 'partial');
+
+UPDATE stock_count_orders
+SET assigned_to = UNHEX(REPLACE('01935c00-0000-7200-8000-000000000009','-',''))
+WHERE assigned_to IS NULL
+  AND status IN ('in_progress');
+
+UPDATE transfer_orders
+SET assigned_to = UNHEX(REPLACE('01935c00-0000-7200-8000-000000000002','-',''))
+WHERE assigned_to IS NULL
+  AND status IN ('approved', 'in_progress', 'partial');
+
+UPDATE etc_inout_orders
+SET assigned_to = UNHEX(REPLACE('01935c00-0000-7200-8000-000000000001','-',''))
+WHERE assigned_to IS NULL
+  AND status IN ('approved');

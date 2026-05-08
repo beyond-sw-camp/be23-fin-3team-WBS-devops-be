@@ -32,13 +32,14 @@ import java.util.UUID;
 @Builder
 @Entity
 @Table(name = "inventories",
-        // (warehouse_id, location_id) 조합이 유일해야 함
-        // [정책] 한 Location(층)에는 한 가지 SKU만 보관 가능
+        // (client_id, warehouse_id, location_id) 조합이 유일해야 함
+        // [정책] 한 고객사의 한 Location(층)에는 한 가지 SKU만 보관 가능
         //  - 같은 상품은 기존 row에 수량만 누적
-        //  - 다른 상품은 같은 Location에 들어갈 수 없음 (DB 레벨 강제)
+        //  - 다른 고객사는 같은 물리 Location 코드를 써도 별도 재고로 관리한다.
+        //  - 같은 고객사의 다른 상품은 같은 Location에 들어갈 수 없음 (DB 레벨 강제)
         uniqueConstraints = @UniqueConstraint(
-                name = "uk_inventory_warehouse_location",
-                columnNames = {"warehouse_id", "location_id"}
+                name = "uk_inventory_client_warehouse_location",
+                columnNames = {"client_id", "warehouse_id", "location_id"}
         ))
 public class Inventory {
 

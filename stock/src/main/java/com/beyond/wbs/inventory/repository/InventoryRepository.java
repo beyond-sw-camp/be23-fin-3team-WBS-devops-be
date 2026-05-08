@@ -45,6 +45,22 @@ public interface InventoryRepository extends JpaRepository<Inventory, UUID> {
                                       @Param("locationId") UUID locationId);
 
     /**
+     * 재고 변경용 비관적 락 조회.
+     * 같은 상품/창고/위치라도 client가 다르면 별도 재고로 취급해야 한다.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT i FROM Inventory i " +
+            "WHERE i.clientId = :clientId " +
+            "AND i.productId = :productId " +
+            "AND i.warehouseId = :warehouseId " +
+            "AND ((:locationId IS NULL AND i.locationId IS NULL) " +
+            "     OR i.locationId = :locationId)")
+    Optional<Inventory> findForUpdateByClient(@Param("clientId") UUID clientId,
+                                              @Param("productId") UUID productId,
+                                              @Param("warehouseId") UUID warehouseId,
+                                              @Param("locationId") UUID locationId);
+
+    /**
      * 창고 단위 재고 조회
      * - 창고별 재고 현황 화면
      */

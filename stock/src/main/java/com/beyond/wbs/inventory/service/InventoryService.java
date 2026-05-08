@@ -1099,7 +1099,7 @@ public class InventoryService {
         //   1) pending 은 null-location 행에서 차감
         //   2) available 은 실제 location 행(없으면 생성)에 증가
         Inventory pendingInventory = inventoryRepository
-                .findForUpdate(productId, warehouseId, null)
+                .findForUpdateByClient(clientId, productId, warehouseId, null)
                 .orElseThrow(() -> new IllegalArgumentException("검수중 재고가 없습니다 (null-location row)."));
 
         int pendingBefore = pendingInventory.getPendingQty();
@@ -1118,6 +1118,7 @@ public class InventoryService {
         List<Inventory> conflictRows = inventoryRepository
                 .findByWarehouseIdAndLocationId(warehouseId, locationId)
                 .stream()
+                .filter(inv -> clientId.equals(inv.getClientId()))
                 .filter(inv -> inv.getProductId() != null && !inv.getProductId().equals(productId))
                 .filter(inv -> inv.getTotalQty() != null && inv.getTotalQty() > 0)
                 .toList();
@@ -1132,7 +1133,7 @@ public class InventoryService {
 
         // 실제 적치 위치 row — 없으면 생성 후 available 증가
         Inventory availableInventory = inventoryRepository
-                .findForUpdate(productId, warehouseId, locationId)
+                .findForUpdateByClient(clientId, productId, warehouseId, locationId)
                 .orElseGet(() -> createEmptyInventory(clientId, productId, warehouseId, locationId));
 
         // 로케이션 수용량 검증: 현재 보관량 + 적치량 > 최대 수용량이면 거부

@@ -174,7 +174,10 @@ public class AiWorkQueryService {
         LocalDate targetDate = normalizeDate(date);
         List<Map<String, Object>> rows = new ArrayList<>();
         rows.addAll(jdbcTemplate.queryForList("""
-                SELECT '입고 검수' AS work_type,
+                SELECT CASE
+                           WHEN io.status IN ('received', 'placing', 'partial') THEN '적치'
+                           ELSE '입고 검수'
+                       END AS work_type,
                        io.order_no AS document_no,
                        w.name AS warehouse_name,
                        io.status,
@@ -183,7 +186,7 @@ public class AiWorkQueryService {
                 FROM inbound_orders io
                 JOIN master_db.warehouses w ON w.id = io.warehouse_id
                 WHERE (? IS NULL OR io.client_id = UNHEX(REPLACE(?, '-', '')))
-                  AND io.status IN ('approved')
+                  AND io.status IN ('approved', 'received', 'placing', 'partial')
                   AND (? IS NULL OR io.expected_date = ?)
                 ORDER BY io.expected_date ASC
                 LIMIT ?

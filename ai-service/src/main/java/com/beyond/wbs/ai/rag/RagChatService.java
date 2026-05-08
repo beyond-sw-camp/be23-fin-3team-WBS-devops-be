@@ -74,6 +74,19 @@ public class RagChatService {
         return answer;
     }
 
+    public String retrieveContext(String question, String category, List<ChatTurn> history) {
+        long startedAt = System.nanoTime();
+        String retrievalQuestion = rewriteQuestion(question, history == null ? List.of() : history);
+        String effectiveCategory = resolveCategory(category, retrievalQuestion);
+        SearchRequest searchRequest = buildSearchRequest(retrievalQuestion, effectiveCategory);
+        long searchStartedAt = System.nanoTime();
+        List<Document> documents = vectorStore.similaritySearch(searchRequest);
+        logRetrieval(effectiveCategory, retrievalQuestion, documents, elapsedMs(searchStartedAt));
+        log.info("[AI_RAG_CONTEXT] category={}, docs={}, totalMs={}, question='{}'",
+                effectiveCategory, documents.size(), elapsedMs(startedAt), sanitize(retrievalQuestion));
+        return formatContext(documents);
+    }
+
     public Flux<String> askStream(String question, String category) {
         return askStream(question, category, List.of());
     }
@@ -175,13 +188,7 @@ public class RagChatService {
     }
 
     private String buildRagUserPrompt(String question, List<Document> documents) {
-        StringBuilder context = new StringBuilder();
-        for (int i = 0; i < documents.size(); i++) {
-            Document document = documents.get(i);
-            context.append("[문서 ").append(i + 1).append("]\n")
-                    .append(document.getText() == null ? "" : document.getText())
-                    .append("\n\n");
-        }
+        String context = formatContext(documents);
         return """
                 사용자 질문:
                 %s
@@ -191,6 +198,17 @@ public class RagChatService {
 
                 위 CONTEXT만 근거로 답변:
                 """.formatted(question, context);
+    }
+
+    private String formatContext(List<Document> documents) {
+        StringBuilder context = new StringBuilder();
+        for (int i = 0; i < documents.size(); i++) {
+            Document document = documents.get(i);
+            context.append("[문서 ").append(i + 1).append("]\n")
+                    .append(document.getText() == null ? "" : document.getText())
+                    .append("\n\n");
+        }
+        return context.toString().trim();
     }
 
     private String normalizeCategory(String category) {

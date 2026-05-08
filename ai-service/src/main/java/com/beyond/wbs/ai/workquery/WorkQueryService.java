@@ -1,6 +1,7 @@
 package com.beyond.wbs.ai.workquery;
 
 import com.beyond.wbs.ai.openai.OpenAiChatGateway;
+import com.beyond.wbs.ai.rag.RagChatService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.beyond.wbs.ai.chat.dto.ChatTurn;
@@ -23,6 +24,7 @@ public class WorkQueryService {
     private final OpenAiChatGateway openAiChatGateway;
     private final ObjectMapper objectMapper;
     private final StockWorkQueryClient stockWorkQueryClient;
+    private final RagChatService ragChatService;
 
     private static final int LIMIT = 8;
     private static final Pattern KOREAN_MONTH_DAY = Pattern.compile("(\\d{1,2})\\s*월\\s*(\\d{1,2})\\s*일");
@@ -31,10 +33,12 @@ public class WorkQueryService {
     public WorkQueryService(
             OpenAiChatGateway openAiChatGateway,
             ObjectMapper objectMapper,
-            StockWorkQueryClient stockWorkQueryClient) {
+            StockWorkQueryClient stockWorkQueryClient,
+            RagChatService ragChatService) {
         this.openAiChatGateway = openAiChatGateway;
         this.objectMapper = objectMapper;
         this.stockWorkQueryClient = stockWorkQueryClient;
+        this.ragChatService = ragChatService;
     }
 
     public WorkQueryResponse ask(
@@ -113,6 +117,7 @@ public class WorkQueryService {
 	                - "피킹 작업 뭐야", "내가 오늘 해야 할 피킹"은 PENDING_WORK가 아니라 MY_PICKING_TASKS.
 	                - "오늘 뭐부터", "우선 처리", "미처리 지시서"처럼 입고/출고/피킹이 특정되지 않은 질문만 PENDING_WORK.
 	                - "마우스 어딨어", "모니터 있나", "키보드 위치 좀"처럼 상품의 위치/존재/수량을 묻는 질문은 INVENTORY_LOCATION.
+	                - "유선 마우스 출고 어떻게 해", "키보드 출고 원해"처럼 특정 상품 출고 방법을 묻는 질문은 출고 가능 재고 확인이 먼저이므로 INVENTORY_LOCATION.
 	                - "무선 말고 그냥 마우스", "무선 제외하고 마우스"처럼 제외 표현이 있으면 product는 제외어를 빼고 핵심 상품명만 쓴다. 예: product="마우스".
 		                - product, warehouse, status, date는 질문에 있으면 채우고 없으면 빈 문자열.
 	                - INVENTORY_LOCATION은 현재 재고 위치 조회이므로 date는 항상 빈 문자열로 둔다.
@@ -157,6 +162,9 @@ public class WorkQueryService {
         if (hasAny(q, "입고", "입하", "검수", "적치")
                 && !hasAny(q, "출고", "피킹")) {
             return Intent.INBOUND_STATUS;
+        }
+        if (isProductOutboundHowToQuestion(question)) {
+            return Intent.INVENTORY_LOCATION;
         }
         if (hasAny(q, "출고", "배송", "출하")
                 && !hasAny(q, "입고", "검수", "적치")) {
@@ -430,6 +438,9 @@ public class WorkQueryService {
                 && hasAny(q, "피킹", "작업", "업무")) {
             return Intent.MY_PICKING_TASKS;
         }
+        if (isProductOutboundHowToQuestion(question)) {
+            return Intent.INVENTORY_LOCATION;
+        }
         if (hasAny(q, "어디", "어딨", "어딧", "위치", "찾아", "있나", "있어", "남아", "남았", "몇 개", "몇개", "수량", "보유", "재고")
                 && !hasAny(q, "입고", "출고", "지시서", "처리")) {
             return Intent.INVENTORY_LOCATION;
@@ -486,9 +497,6 @@ public class WorkQueryService {
         if (rows.isEmpty()) {
             return new AnswerResult(emptyAnswer(question, intent), 0, true);
         }
-        if (intent == Intent.INVENTORY_LOCATION) {
-            return new AnswerResult(inventoryLocationAnswer(rows), 0, true);
-        }
 
         StringBuilder rowText = new StringBuilder();
         for (int i = 0; i < Math.min(rows.size(), LIMIT); i++) {
@@ -501,14 +509,23 @@ public class WorkQueryService {
             rowText.append('\n');
         }
 
+        String procedureContext = retrieveProcedureContext(question, intent, history);
+        String procedureInstruction = procedureContext.isBlank()
+                ? "- 업무 절차 문서 근거가 없으면 조회 결과만으로 답하고, 절차를 추측해서 길게 만들지 않는다."
+                : "- 업무 절차가 필요한 질문은 조회 결과와 업무 절차 문서 근거를 함께 사용한다.";
+
         String prompt = """
                 역할: 전자기기 WMS 업무 조회 챗봇.
-                임무: 조회 결과만 근거로 한국어 답변을 작성한다.
+                임무: 조회 결과와 필요한 경우 업무 절차 문서 근거를 함께 사용해 한국어 답변을 작성한다.
                 형식: 1~2문장. 내부 컬럼명, SQL, UUID 금지. 추측 금지.
                 말투:
                 - 사용자가 "뭐 해야 돼?", "뭐해야돼?", "해야 해?"처럼 할 일을 물으면 마지막 문장은 반드시 "~해야 합니다."로 끝낸다.
                 - 사용자가 위치를 물으면 상품명, 창고명, 로케이션을 먼저 말한다.
                 - 날짜를 물은 경우 사용자 질문의 날짜에 대한 답으로 말한다.
+                - INVENTORY_LOCATION 결과는 현재 재고 조회 결과다. 상품명, 창고명, 위치, 가용 수량을 사용자가 바로 판단할 수 있게 말한다.
+                - 특정 상품의 출고 방법을 물은 경우에는 조회된 출고 가능 재고를 먼저 말한 뒤, 업무 절차 문서 근거에 따라 다음 단계를 안내한다.
+                - 출고 방법 답변에서 재고가 없거나 가용 수량이 0이면 출고 가능 재고가 없다고 말하고 지시서 생성을 권하지 않는다.
+                %s
                 상태 해석:
                 - approved는 완료가 아니라 승인 완료 후 처리 대기 상태다.
                 - pending/draft는 대기, in_progress/picking/placing은 진행 중, completed/received는 완료다.
@@ -520,9 +537,13 @@ public class WorkQueryService {
                 최근 대화: %s
                 조회 결과:
                 %s
+                
+                업무 절차 문서 근거:
+                %s
 
                 답변:
-                """.formatted(question, intent.label, formatHistory(history), rowText);
+                """.formatted(procedureInstruction, question, intent.label, formatHistory(history), rowText,
+                procedureContext.isBlank() ? "(없음)" : procedureContext);
 
         try {
             long llmStartedAt = System.nanoTime();
@@ -545,34 +566,37 @@ public class WorkQueryService {
         }
     }
 
-    private String inventoryLocationAnswer(List<Map<String, Object>> rows) {
-        StringBuilder answer = new StringBuilder();
-        int count = Math.min(rows.size(), LIMIT);
-        for (int i = 0; i < count; i++) {
-            Map<String, Object> row = rows.get(i);
-            String productName = formatValue(row.get("product_name"));
-            String warehouseName = formatValue(row.get("warehouse_name"));
-            String locationCode = normalizeLocationCode(row.get("location_code"));
-
-            if (i > 0) {
-                answer.append(" ");
-            }
-            answer.append(productName).append("는 ").append(warehouseName).append("에 있으며, ");
-            if (locationCode.isBlank()) {
-                answer.append("위치는 미지정입니다.");
-            } else {
-                answer.append(locationCode).append("에 있습니다.");
-            }
-        }
-        return answer.toString();
-    }
-
-    private String normalizeLocationCode(Object value) {
-        String locationCode = formatValue(value);
-        if (locationCode.equals("-") || locationCode.equalsIgnoreCase("null")) {
+    private String retrieveProcedureContext(String question, Intent intent, List<ChatTurn> history) {
+        if (!needsProcedureContext(question, intent)) {
             return "";
         }
-        return locationCode;
+        String retrievalQuestion = procedureRetrievalQuestion(question);
+        try {
+            long startedAt = System.nanoTime();
+            String context = ragChatService.retrieveContext(retrievalQuestion, "wms-work-procedures", history);
+            log.info("[AI_WORK_QUERY_RAG] intent={}, contextChars={}, ragMs={}, question='{}'",
+                    intent, context.length(), elapsedMs(startedAt), sanitizeForLog(retrievalQuestion));
+            return context;
+        } catch (Exception e) {
+            log.warn("[AI_WORK_QUERY_RAG] skipped intent={}, reason={}, question='{}'",
+                    intent, e.getMessage(), sanitizeForLog(retrievalQuestion));
+            return "";
+        }
+    }
+
+    private boolean needsProcedureContext(String question, Intent intent) {
+        if (intent != Intent.INVENTORY_LOCATION && intent != Intent.OUTBOUND_STATUS) {
+            return false;
+        }
+        return isProductOutboundHowToQuestion(question)
+                || hasAny(normalize(question), "방법", "절차", "어떻게", "프로세스", "순서", "원해", "하려", "하고 싶");
+    }
+
+    private String procedureRetrievalQuestion(String question) {
+        if (isProductOutboundHowToQuestion(question)) {
+            return "상품 출고 지시서 생성 승인 피킹 리스트 생성 절차";
+        }
+        return question;
     }
 
     private String fallbackAnswer(Intent intent, List<Map<String, Object>> rows) {
@@ -598,15 +622,22 @@ public class WorkQueryService {
         };
     }
 
-	    private String emptyAnswer(String question, Intent intent) {
-	        if (intent == Intent.INVENTORY_LOCATION && hasExclusionExpression(question)) {
-	            String product = extractProductKeyword(question);
-	            String excluded = String.join(", ", excludedProductTerms(question));
-	            if (!product.isBlank() && !excluded.isBlank()) {
-	                return "죄송합니다. 요청하신 질문을 처리할 수 없습니다.";
-	            }
-	        }
-        return "죄송합니다. 요청하신 질문을 처리할 수 없습니다.";
+    private String emptyAnswer(String question, Intent intent) {
+        String topic = requestedDateTopic(question);
+        return switch (intent) {
+            case PENDING_WORK -> "%s 처리할 작업이 존재하지 않습니다.".formatted(topic);
+            case MY_PICKING_TASKS -> "%s 담당 피킹 작업이 존재하지 않습니다.".formatted(topic);
+            case INBOUND_STATUS -> "%s 조회되는 입고 작업이 없습니다.".formatted(topic);
+            case OUTBOUND_STATUS -> "%s 조회되는 출고 작업이 없습니다.".formatted(topic);
+            case LOW_STOCK -> "현재 부족 위험 재고가 없습니다.";
+            case INVENTORY_LOCATION -> {
+                String product = extractProductKeyword(question);
+                if (product.isBlank()) {
+                    yield "조건에 맞는 재고 위치를 찾지 못했습니다.";
+                }
+                yield "%s 재고 위치를 찾지 못했습니다.".formatted(product);
+            }
+        };
     }
 
     private String actionAnswer(String question, List<Map<String, Object>> rows) {
@@ -651,12 +682,20 @@ public class WorkQueryService {
 	        String keyword = source
 	                .replaceAll("(?i)재고|어디에|어디|위치|있어|있나요|알려줘|몇\\s*개|몇개|남았어|남아|보유|수량|상품|제품|센터|창고|물류센터|부산|서울|대전", " ")
 	                .replaceAll("(?i)어딨어|어딨니|어딨냐|어딨지|어딧어|있나|찾아줘|찾아|위치\\s*좀", " ")
+	                .replaceAll("(?i)출고|출하|배송|피킹|어떻게|방법|절차|진행|원해|하려고|하고\\s*싶어|하고싶어|해줘|해주세요|해", " ")
 	                .replaceAll("(?i)그냥|일반|일반적인|말고|제외하고|제외한|빼고|아닌", " ")
 	                .replaceAll("[?？!！.,]", " ")
 	                .replaceAll("\\s+", " ")
 	                .trim();
 	        return keyword.replaceAll("(은|는|이|가|을|를|도|에)$", "").trim();
 	    }
+
+    private boolean isProductOutboundHowToQuestion(String question) {
+        String q = normalize(question).toLowerCase(Locale.ROOT);
+        return hasAny(q, "출고", "출하", "배송")
+                && hasAny(q, "어떻게", "방법", "절차", "원해", "하려", "하고 싶", "해")
+                && !extractProductKeyword(question).isBlank();
+    }
 
 	    private boolean shouldTrustCurrentProductKeyword(String question, String extracted) {
 	        if (extracted.isBlank()) {
@@ -774,8 +813,11 @@ public class WorkQueryService {
 
     private String normalizeDateSlot(String value, String question) {
         String fallback = extractDateKeyword(question);
-        if (value == null || value.isBlank()) {
+        if (!fallback.isBlank()) {
             return fallback;
+        }
+        if (value == null || value.isBlank()) {
+            return "";
         }
         String normalized = normalize(value).toLowerCase(Locale.ROOT);
         if ("today".equals(normalized)) {
@@ -785,7 +827,7 @@ public class WorkQueryService {
             return normalized;
         }
         String parsed = extractDateKeyword(normalized);
-        return parsed.isBlank() ? fallback : parsed;
+        return parsed;
     }
 
     private String requestedDateLabel(String question) {
@@ -793,11 +835,29 @@ public class WorkQueryService {
         if (date.isBlank()) {
             return "";
         }
+        String q = normalize(question);
         if ("today".equals(date)) {
             return "오늘";
         }
+        if (q.contains("내일")) {
+            return "내일";
+        }
+        if (q.contains("어제")) {
+            return "어제";
+        }
         LocalDate parsed = LocalDate.parse(date);
         return parsed.getMonthValue() + "월 " + parsed.getDayOfMonth() + "일";
+    }
+
+    private String requestedDateTopic(String question) {
+        String label = requestedDateLabel(question);
+        if (label.isBlank()) {
+            return "현재는";
+        }
+        if ("오늘".equals(label) || "내일".equals(label) || "어제".equals(label)) {
+            return label + "은";
+        }
+        return label + "에는";
     }
 
     private boolean hasAny(String value, String... keywords) {
