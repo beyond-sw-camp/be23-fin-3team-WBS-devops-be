@@ -58,6 +58,12 @@ spring:
           stock-service:
             connect-timeout: ${STOCK_SERVICE_CONNECT_TIMEOUT_MS:3000}
             read-timeout: ${STOCK_SERVICE_READ_TIMEOUT_MS:120000}
+          master-service:
+            connect-timeout: ${MASTER_SERVICE_CONNECT_TIMEOUT_MS:3000}
+            read-timeout: ${MASTER_SERVICE_READ_TIMEOUT_MS:120000}
+          account-service:
+            connect-timeout: ${ACCOUNT_SERVICE_CONNECT_TIMEOUT_MS:3000}
+            read-timeout: ${ACCOUNT_SERVICE_READ_TIMEOUT_MS:120000}
 
 wms:
   readonly-datasource:
@@ -69,6 +75,10 @@ wms:
 services:
   stock:
     url: ${STOCK_SERVICE_URL:http://stock-service}
+  master:
+    url: ${MASTER_SERVICE_URL:http://master-service}
+  account:
+    url: ${ACCOUNT_SERVICE_URL:http://account-service}
 
 logging:
   level:

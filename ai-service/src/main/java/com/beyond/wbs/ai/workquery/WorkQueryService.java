@@ -1,7 +1,6 @@
 package com.beyond.wbs.ai.workquery;
 
 import com.beyond.wbs.ai.openai.OpenAiChatGateway;
-import com.beyond.wbs.ai.rag.RagChatService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.beyond.wbs.ai.chat.dto.ChatTurn;
@@ -24,7 +23,8 @@ public class WorkQueryService {
     private final OpenAiChatGateway openAiChatGateway;
     private final ObjectMapper objectMapper;
     private final StockWorkQueryClient stockWorkQueryClient;
-    private final RagChatService ragChatService;
+    private final MasterWorkQueryClient masterWorkQueryClient;
+    private final AccountWorkQueryClient accountWorkQueryClient;
 
     private static final int LIMIT = 8;
     private static final Pattern KOREAN_MONTH_DAY = Pattern.compile("(\\d{1,2})\\s*월\\s*(\\d{1,2})\\s*일");
@@ -34,11 +34,13 @@ public class WorkQueryService {
             OpenAiChatGateway openAiChatGateway,
             ObjectMapper objectMapper,
             StockWorkQueryClient stockWorkQueryClient,
-            RagChatService ragChatService) {
+            MasterWorkQueryClient masterWorkQueryClient,
+            AccountWorkQueryClient accountWorkQueryClient) {
         this.openAiChatGateway = openAiChatGateway;
         this.objectMapper = objectMapper;
         this.stockWorkQueryClient = stockWorkQueryClient;
-        this.ragChatService = ragChatService;
+        this.masterWorkQueryClient = masterWorkQueryClient;
+        this.accountWorkQueryClient = accountWorkQueryClient;
     }
 
     public WorkQueryResponse ask(
@@ -63,30 +65,31 @@ public class WorkQueryService {
                 ? contextualInventoryRoute
                 : routeWithLlm(question, history);
         Intent intent = route.intent();
-        log.info("[AI_WORK_QUERY_START] intent={}, followUp={}, routeSource={}, confidence={}, slots={}, clientId={}, userId={}, question='{}'",
-                intent, followUp != null, route.source(), route.confidence(), route.slots(),
+        WorkQueryTarget target = route.target();
+        log.info("[AI_WORK_QUERY_START] target={}, intent={}, followUp={}, routeSource={}, confidence={}, slots={}, clientId={}, userId={}, question='{}'",
+                target, intent, followUp != null, route.source(), route.confidence(), route.slots(),
                 mask(clientId), mask(userId), question);
 
         try {
             long apiStartedAt = System.nanoTime();
 	            List<Map<String, Object>> rows = followUp != null
 	                    ? followUp.rows()
-	                    : callStockApi(route, clientId, userId);
+	                    : callTargetApi(route, clientId, userId);
 	            rows = applyQuestionFilters(question, intent, rows);
             long apiMs = elapsedMs(apiStartedAt);
-            log.info("[AI_WORK_QUERY_API] target=stock-service, intent={}, followUp={}, rows={}, apiMs={}",
-                    intent, followUp != null, rows.size(), apiMs);
+            log.info("[AI_WORK_QUERY_API] target={}, intent={}, followUp={}, rows={}, apiMs={}",
+                    target, intent, followUp != null, rows.size(), apiMs);
 
-            AnswerResult answerResult = composeAnswer(question, intent, rows, history);
+            AnswerResult answerResult = composeAnswer(question, target, intent, rows, history);
             long totalMs = elapsedMs(startedAt);
 
-            log.info("[AI_WORK_QUERY_END] intent={}, followUp={}, routeSource={}, rows={}, apiMs={}, llmMs={}, totalMs={}, fallback={}, clientId={}, userId={}, question='{}'",
-                    intent, followUp != null, route.source(), rows.size(), apiMs, answerResult.llmMs(), totalMs, answerResult.fallback(),
+            log.info("[AI_WORK_QUERY_END] target={}, intent={}, followUp={}, routeSource={}, rows={}, apiMs={}, llmMs={}, totalMs={}, fallback={}, clientId={}, userId={}, question='{}'",
+                    target, intent, followUp != null, route.source(), rows.size(), apiMs, answerResult.llmMs(), totalMs, answerResult.fallback(),
                     mask(clientId), mask(userId), question);
-            return new WorkQueryResponse(question, intent.name(), answerResult.answer(), rows, followUp != null);
+            return new WorkQueryResponse(question, target.name(), intent.name(), answerResult.answer(), rows, followUp != null);
         } catch (Exception e) {
-            log.error("[AI_WORK_QUERY_ERROR] intent={}, followUp={}, totalMs={}, clientId={}, userId={}, question='{}', error={}",
-                    intent, followUp != null, elapsedMs(startedAt), mask(clientId), mask(userId), question, e.getMessage(), e);
+            log.error("[AI_WORK_QUERY_ERROR] target={}, intent={}, followUp={}, totalMs={}, clientId={}, userId={}, question='{}', error={}",
+                    target, intent, followUp != null, elapsedMs(startedAt), mask(clientId), mask(userId), question, e.getMessage(), e);
             throw e;
         }
     }
@@ -101,6 +104,7 @@ public class WorkQueryService {
                 사용자 질문을 보고 아래 JSON만 반환한다. 설명, markdown, 코드블록 금지.
 
                 intent 후보:
+                [stock-service]
                 - MY_PICKING_TASKS: 내 담당 피킹/작업 조회
                 - PENDING_WORK: 오늘 처리할 업무/급한 일/우선순위/미처리 지시서 조회
                 - INBOUND_STATUS: 입고/검수/적치/들어올 상품 조회
@@ -108,21 +112,37 @@ public class WorkQueryService {
                 - INVENTORY_LOCATION: 특정 상품 재고 위치/수량 조회
                 - LOW_STOCK: 부족/위험/품절/보충 필요 재고 조회
 
+                [master-service]
+                - PRODUCT_INFO: 상품/SKU/바코드/상품그룹/카테고리/활성 여부 조회
+                - WAREHOUSE_INFO: 창고/창고 타입/담당자/활성 여부 조회
+                - LOCATION_INFO: 구역/랙/로케이션/활성 여부/수용량 조회
+                - SUPPLIER_INFO: 공급사/협력사/ESG/친환경 인증 조회
+                - STORE_INFO: 매장/출고처/자동 웨이브 설정 조회
+
+                [account-service]
+                - USER_INFO: 사용자/직원/관리자 계정/활성 여부/역할 조회
+                - ROLE_INFO: 역할/권한/permission 조회
+                - CLIENT_INFO: 회사/고객사/테넌트 조회
+
                 JSON 스키마:
-                {"intent":"INVENTORY_LOCATION","confidence":0.0,"slots":{"product":"모니터","warehouse":"부산","status":"","date":""}}
+                {"target":"STOCK","intent":"INVENTORY_LOCATION","confidence":0.0,"slots":{"keyword":"","product":"모니터","warehouse":"부산","status":"","date":""}}
 
                 규칙:
                 - intent는 후보 중 하나만.
+                - target은 STOCK, MASTER, ACCOUNT 중 하나만.
                 - "내/나/담당"과 "피킹"이 함께 있으면 반드시 MY_PICKING_TASKS.
 	                - "피킹 작업 뭐야", "내가 오늘 해야 할 피킹"은 PENDING_WORK가 아니라 MY_PICKING_TASKS.
 	                - "오늘 뭐부터", "우선 처리", "미처리 지시서"처럼 입고/출고/피킹이 특정되지 않은 질문만 PENDING_WORK.
 	                - "마우스 어딨어", "모니터 있나", "키보드 위치 좀"처럼 상품의 위치/존재/수량을 묻는 질문은 INVENTORY_LOCATION.
-	                - "유선 마우스 출고 어떻게 해", "키보드 출고 원해"처럼 특정 상품 출고 방법을 묻는 질문은 출고 가능 재고 확인이 먼저이므로 INVENTORY_LOCATION.
+                - "마우스 출고 가능한 재고 있어?", "키보드 출고 가능 수량 알려줘"처럼 현재 재고/수량/위치를 묻는 질문은 INVENTORY_LOCATION.
+                - 출고 방법/절차/실패 원인 설명은 이 서비스의 대상이 아니므로, 들어오더라도 현재 재고 조회 의도로 바꾸지 않는다.
 	                - "무선 말고 그냥 마우스", "무선 제외하고 마우스"처럼 제외 표현이 있으면 product는 제외어를 빼고 핵심 상품명만 쓴다. 예: product="마우스".
 		                - product, warehouse, status, date는 질문에 있으면 채우고 없으면 빈 문자열.
 	                - INVENTORY_LOCATION은 현재 재고 위치 조회이므로 date는 항상 빈 문자열로 둔다.
                 - date는 가능하면 yyyy-MM-dd 형식으로 쓴다.
                 - 오늘/금일은 date를 "today"로 쓴다.
+                - 상품/창고/구역/랙/로케이션/공급사/매장 같은 기준 정보는 MASTER다.
+                - 사용자/직원/관리자/역할/권한/회사 정보는 ACCOUNT다.
                 - 자신 없으면 PENDING_WORK, confidence 0.5.
 
                 최근 대화:
@@ -155,6 +175,15 @@ public class WorkQueryService {
 
     private Intent explicitIntent(String question) {
         String q = question.toLowerCase(Locale.ROOT);
+        if (hasAny(q, "권한", "permission", "role", "역할")) {
+            return Intent.ROLE_INFO;
+        }
+        if (hasAny(q, "사용자", "직원", "관리자", "계정", "로그인", "login", "loginid")) {
+            return Intent.USER_INFO;
+        }
+        if (hasAny(q, "회사", "고객사", "테넌트", "client")) {
+            return Intent.CLIENT_INFO;
+        }
         if (hasAny(q, "내", "나", "담당")
                 && hasAny(q, "피킹", "picking")) {
             return Intent.MY_PICKING_TASKS;
@@ -162,9 +191,6 @@ public class WorkQueryService {
         if (hasAny(q, "입고", "입하", "검수", "적치")
                 && !hasAny(q, "출고", "피킹")) {
             return Intent.INBOUND_STATUS;
-        }
-        if (isProductOutboundHowToQuestion(question)) {
-            return Intent.INVENTORY_LOCATION;
         }
         if (hasAny(q, "출고", "배송", "출하")
                 && !hasAny(q, "입고", "검수", "적치")) {
@@ -176,6 +202,21 @@ public class WorkQueryService {
         if (hasAny(q, "어디", "어딨", "어딧", "위치", "찾아", "있나", "있어", "남아", "남았", "몇 개", "몇개", "수량", "보유", "재고")
                 && !hasAny(q, "입고", "출고", "지시서", "처리")) {
             return Intent.INVENTORY_LOCATION;
+        }
+        if (hasAny(q, "공급사", "협력사", "esg", "친환경")) {
+            return Intent.SUPPLIER_INFO;
+        }
+        if (hasAny(q, "매장", "출고처", "웨이브")) {
+            return Intent.STORE_INFO;
+        }
+        if (hasAny(q, "로케이션", "랙", "구역", "존", "zone", "rack", "location")) {
+            return Intent.LOCATION_INFO;
+        }
+        if (hasAny(q, "창고", "센터", "물류센터")) {
+            return Intent.WAREHOUSE_INFO;
+        }
+        if (hasAny(q, "상품", "제품", "sku", "바코드", "카테고리", "상품그룹")) {
+            return Intent.PRODUCT_INFO;
         }
         return null;
     }
@@ -189,8 +230,12 @@ public class WorkQueryService {
             intent = classify(question);
         }
         double confidence = parseDouble(map.get("confidence"), 0.5);
-	        Map<String, String> slots = normalizeSlots(map.get("slots"), question);
-	        return new RouteResult(intent, confidence, slots, "llm");
+        Map<String, String> slots = normalizeSlots(map.get("slots"), question);
+        WorkQueryTarget target = parseTarget(String.valueOf(map.get("target")));
+        if (target == null || !supportsIntent(target, intent)) {
+            target = defaultTarget(intent);
+        }
+	        return new RouteResult(target, intent, confidence, slots, "llm");
 	    }
 
 	    private RouteResult refineRoute(String question, RouteResult route) {
@@ -221,7 +266,7 @@ public class WorkQueryService {
 	        Map<String, String> slots = new LinkedHashMap<>(route.slots());
 	        slots.put("product", product);
 	        slots.put("date", "");
-	        return new RouteResult(route.intent(), route.confidence(), slots, route.source() + "+refined");
+	        return new RouteResult(route.target(), route.intent(), route.confidence(), slots, route.source() + "+refined");
 	    }
 
     private String extractJson(String content) {
@@ -236,19 +281,25 @@ public class WorkQueryService {
 
     private Map<String, String> normalizeSlots(Object value, String question) {
         Map<String, String> slots = new LinkedHashMap<>();
+        slots.put("keyword", "");
         slots.put("product", "");
         slots.put("warehouse", "");
         slots.put("status", "");
         slots.put("date", extractDateKeyword(question));
         if (!(value instanceof Map<?, ?> raw)) {
+            slots.put("keyword", extractKeyword(question));
             return slots;
         }
+        slots.put("keyword", slotValue(raw, "keyword"));
         slots.put("product", slotValue(raw, "product"));
         slots.put("warehouse", slotValue(raw, "warehouse"));
         slots.put("status", slotValue(raw, "status"));
         String date = normalizeDateSlot(slotValue(raw, "date"), question);
         if (!date.isBlank()) {
             slots.put("date", date);
+        }
+        if (slots.get("keyword").isBlank()) {
+            slots.put("keyword", firstNonBlank(slots.get("product"), slots.get("warehouse"), extractKeyword(question)));
         }
         return slots;
     }
@@ -428,18 +479,47 @@ public class WorkQueryService {
         }
     }
 
+    private WorkQueryTarget parseTarget(String value) {
+        if (isBlank(value)) {
+            return null;
+        }
+        try {
+            return WorkQueryTarget.valueOf(value.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    private WorkQueryTarget defaultTarget(Intent intent) {
+        return switch (intent) {
+            case PRODUCT_INFO, WAREHOUSE_INFO, LOCATION_INFO, SUPPLIER_INFO, STORE_INFO -> WorkQueryTarget.MASTER;
+            case USER_INFO, ROLE_INFO, CLIENT_INFO -> WorkQueryTarget.ACCOUNT;
+            default -> WorkQueryTarget.STOCK;
+        };
+    }
+
+    private boolean supportsIntent(WorkQueryTarget target, Intent intent) {
+        return defaultTarget(intent) == target;
+    }
+
     private Intent classify(String question) {
         String q = question.toLowerCase(Locale.ROOT);
 
+        if (hasAny(q, "권한", "permission", "role", "역할")) {
+            return Intent.ROLE_INFO;
+        }
+        if (hasAny(q, "사용자", "직원", "관리자", "계정", "로그인", "login", "loginid")) {
+            return Intent.USER_INFO;
+        }
+        if (hasAny(q, "회사", "고객사", "테넌트", "client")) {
+            return Intent.CLIENT_INFO;
+        }
         if (hasAny(q, "부족", "위험", "품절", "모자", "재고 부족", "보충", "긴급 발주")) {
             return Intent.LOW_STOCK;
         }
         if (hasAny(q, "내", "나", "담당", "할 일", "해야 할", "해야될", "해야 돼", "해야돼")
                 && hasAny(q, "피킹", "작업", "업무")) {
             return Intent.MY_PICKING_TASKS;
-        }
-        if (isProductOutboundHowToQuestion(question)) {
-            return Intent.INVENTORY_LOCATION;
         }
         if (hasAny(q, "어디", "어딨", "어딧", "위치", "찾아", "있나", "있어", "남아", "남았", "몇 개", "몇개", "수량", "보유", "재고")
                 && !hasAny(q, "입고", "출고", "지시서", "처리")) {
@@ -454,17 +534,52 @@ public class WorkQueryService {
         if (hasAny(q, "처리", "미처리", "지시서", "오늘", "급한", "우선", "뭐부터", "먼저", "해야")) {
             return Intent.PENDING_WORK;
         }
+        if (hasAny(q, "공급사", "협력사", "esg", "친환경")) {
+            return Intent.SUPPLIER_INFO;
+        }
+        if (hasAny(q, "매장", "출고처", "웨이브")) {
+            return Intent.STORE_INFO;
+        }
+        if (hasAny(q, "로케이션", "랙", "구역", "존", "zone", "rack", "location")) {
+            return Intent.LOCATION_INFO;
+        }
+        if (hasAny(q, "창고", "센터", "물류센터")) {
+            return Intent.WAREHOUSE_INFO;
+        }
+        if (hasAny(q, "상품", "제품", "sku", "바코드", "카테고리", "상품그룹")) {
+            return Intent.PRODUCT_INFO;
+        }
         return Intent.PENDING_WORK;
     }
 
-	    private List<Map<String, Object>> callStockApi(RouteResult route, String clientId, String userId) {
-	        StockWorkQueryClient.WorkQueryApiResponse response = stockWorkQueryClient.execute(
-	                clientId,
-	                userId,
-	                new StockWorkQueryClient.WorkQueryApiRequest(route.intent().name(), route.slots(), LIMIT)
-	        );
-	        return response.rows() == null ? List.of() : response.rows();
-	    }
+    private List<Map<String, Object>> callTargetApi(RouteResult route, String clientId, String userId) {
+        return switch (route.target()) {
+            case STOCK -> {
+                StockWorkQueryClient.WorkQueryApiResponse response = stockWorkQueryClient.execute(
+                        clientId,
+                        userId,
+                        new StockWorkQueryClient.WorkQueryApiRequest(route.intent().name(), route.slots(), LIMIT)
+                );
+                yield response.rows() == null ? List.of() : response.rows();
+            }
+            case MASTER -> {
+                MasterWorkQueryClient.WorkQueryApiResponse response = masterWorkQueryClient.execute(
+                        clientId,
+                        userId,
+                        new MasterWorkQueryClient.WorkQueryApiRequest(route.intent().name(), route.slots(), LIMIT)
+                );
+                yield response.rows() == null ? List.of() : response.rows();
+            }
+            case ACCOUNT -> {
+                AccountWorkQueryClient.WorkQueryApiResponse response = accountWorkQueryClient.execute(
+                        clientId,
+                        userId,
+                        new AccountWorkQueryClient.WorkQueryApiRequest(route.intent().name(), route.slots(), LIMIT)
+                );
+                yield response.rows() == null ? List.of() : response.rows();
+            }
+        };
+    }
 
 	    private List<Map<String, Object>> applyQuestionFilters(String question, Intent intent, List<Map<String, Object>> rows) {
 	        if (intent != Intent.INVENTORY_LOCATION || rows.isEmpty()) {
@@ -493,7 +608,7 @@ public class WorkQueryService {
 	                .toList();
 	    }
 
-    private AnswerResult composeAnswer(String question, Intent intent, List<Map<String, Object>> rows, List<ChatTurn> history) {
+    private AnswerResult composeAnswer(String question, WorkQueryTarget target, Intent intent, List<Map<String, Object>> rows, List<ChatTurn> history) {
         if (rows.isEmpty()) {
             return new AnswerResult(emptyAnswer(question, intent), 0, true);
         }
@@ -502,48 +617,38 @@ public class WorkQueryService {
         for (int i = 0; i < Math.min(rows.size(), LIMIT); i++) {
             rowText.append(i + 1).append(". ");
             rows.get(i).forEach((key, value) -> {
-                if (!"assigned_to".equals(key)) {
+                if (!isHiddenAnswerField(key)) {
                     rowText.append(key).append("=").append(formatValue(value)).append(", ");
                 }
             });
             rowText.append('\n');
         }
 
-        String procedureContext = retrieveProcedureContext(question, intent, history);
-        String procedureInstruction = procedureContext.isBlank()
-                ? "- 업무 절차 문서 근거가 없으면 조회 결과만으로 답하고, 절차를 추측해서 길게 만들지 않는다."
-                : "- 업무 절차가 필요한 질문은 조회 결과와 업무 절차 문서 근거를 함께 사용한다.";
-
         String prompt = """
                 역할: 전자기기 WMS 업무 조회 챗봇.
-                임무: 조회 결과와 필요한 경우 업무 절차 문서 근거를 함께 사용해 한국어 답변을 작성한다.
+                임무: 업무 서비스 API 조회 결과만 근거로 한국어 답변을 작성한다.
                 형식: 1~2문장. 내부 컬럼명, SQL, UUID 금지. 추측 금지.
                 말투:
                 - 사용자가 "뭐 해야 돼?", "뭐해야돼?", "해야 해?"처럼 할 일을 물으면 마지막 문장은 반드시 "~해야 합니다."로 끝낸다.
                 - 사용자가 위치를 물으면 상품명, 창고명, 로케이션을 먼저 말한다.
                 - 날짜를 물은 경우 사용자 질문의 날짜에 대한 답으로 말한다.
                 - INVENTORY_LOCATION 결과는 현재 재고 조회 결과다. 상품명, 창고명, 위치, 가용 수량을 사용자가 바로 판단할 수 있게 말한다.
-                - 특정 상품의 출고 방법을 물은 경우에는 조회된 출고 가능 재고를 먼저 말한 뒤, 업무 절차 문서 근거에 따라 다음 단계를 안내한다.
-                - 출고 방법 답변에서 재고가 없거나 가용 수량이 0이면 출고 가능 재고가 없다고 말하고 지시서 생성을 권하지 않는다.
-                %s
+                - 방법/절차/실패 원인을 추측해서 덧붙이지 않는다. 조회 결과에 없는 운영 가이드는 말하지 않는다.
                 상태 해석:
                 - approved는 완료가 아니라 승인 완료 후 처리 대기 상태다.
                 - pending/draft는 대기, in_progress/picking/placing은 진행 중, completed/received는 완료다.
                 - 사용자가 "내 피킹"을 물으면 피킹 작업만 답하고 입고/출고 지시서를 섞지 않는다.
-                - assigned_to_name, assigned_to_login_id가 있으면 시연자가 로그인할 수 있도록 담당자 이름과 로그인 ID를 함께 말한다.
+                - 담당자 정보가 있으면 이름만 말한다. 로그인 ID, 이메일, 전화번호 같은 개인 식별자는 말하지 않는다.
 
                 사용자 질문: %s
+                조회 대상 서비스: %s
                 질문 의도: %s
                 최근 대화: %s
                 조회 결과:
                 %s
-                
-                업무 절차 문서 근거:
-                %s
 
                 답변:
-                """.formatted(procedureInstruction, question, intent.label, formatHistory(history), rowText,
-                procedureContext.isBlank() ? "(없음)" : procedureContext);
+                """.formatted(question, target, intent.label, formatHistory(history), rowText);
 
         try {
             long llmStartedAt = System.nanoTime();
@@ -566,39 +671,6 @@ public class WorkQueryService {
         }
     }
 
-    private String retrieveProcedureContext(String question, Intent intent, List<ChatTurn> history) {
-        if (!needsProcedureContext(question, intent)) {
-            return "";
-        }
-        String retrievalQuestion = procedureRetrievalQuestion(question);
-        try {
-            long startedAt = System.nanoTime();
-            String context = ragChatService.retrieveContext(retrievalQuestion, "wms-work-procedures", history);
-            log.info("[AI_WORK_QUERY_RAG] intent={}, contextChars={}, ragMs={}, question='{}'",
-                    intent, context.length(), elapsedMs(startedAt), sanitizeForLog(retrievalQuestion));
-            return context;
-        } catch (Exception e) {
-            log.warn("[AI_WORK_QUERY_RAG] skipped intent={}, reason={}, question='{}'",
-                    intent, e.getMessage(), sanitizeForLog(retrievalQuestion));
-            return "";
-        }
-    }
-
-    private boolean needsProcedureContext(String question, Intent intent) {
-        if (intent != Intent.INVENTORY_LOCATION && intent != Intent.OUTBOUND_STATUS) {
-            return false;
-        }
-        return isProductOutboundHowToQuestion(question)
-                || hasAny(normalize(question), "방법", "절차", "어떻게", "프로세스", "순서", "원해", "하려", "하고 싶");
-    }
-
-    private String procedureRetrievalQuestion(String question) {
-        if (isProductOutboundHowToQuestion(question)) {
-            return "상품 출고 지시서 생성 승인 피킹 리스트 생성 절차";
-        }
-        return question;
-    }
-
     private String fallbackAnswer(Intent intent, List<Map<String, Object>> rows) {
         Map<String, Object> first = rows.get(0);
         return switch (intent) {
@@ -619,6 +691,28 @@ public class WorkQueryService {
                             assigneeActionPhrase(first),
                             formatValue(first.get("document_no")),
                             formatValue(first.get("warehouse_name")));
+            case PRODUCT_INFO -> "상품 %d건이 조회됩니다. 우선 %s의 SKU는 %s이고 활성 상태는 %s입니다."
+                    .formatted(rows.size(), formatValue(first.get("product_name")), formatValue(first.get("sku")),
+                            formatValue(first.get("is_active")));
+            case WAREHOUSE_INFO -> "창고 %d건이 조회됩니다. 우선 %s(%s)는 %s 타입입니다."
+                    .formatted(rows.size(), formatValue(first.get("warehouse_name")), formatValue(first.get("warehouse_code")),
+                            formatValue(first.get("warehouse_type")));
+            case LOCATION_INFO -> "로케이션/랙 정보 %d건이 조회됩니다. 우선 %s 창고의 %s/%s를 확인하세요."
+                    .formatted(rows.size(), formatValue(first.get("warehouse_name")), formatValue(first.get("zone_name")),
+                            formatValue(first.get("location_code")));
+            case SUPPLIER_INFO -> "공급사 %d건이 조회됩니다. 우선 %s의 ESG 등급은 %s입니다."
+                    .formatted(rows.size(), formatValue(first.get("supplier_name")), formatValue(first.get("esg_grade")));
+            case STORE_INFO -> "매장/출고처 %d건이 조회됩니다. 우선 %s(%s)의 자동 웨이브 설정은 %s입니다."
+                    .formatted(rows.size(), formatValue(first.get("store_name")), formatValue(first.get("store_code")),
+                            formatValue(first.get("auto_wave_enabled")));
+            case USER_INFO -> "사용자 %d건이 조회됩니다. 우선 %s의 역할은 %s이고 활성 상태는 %s입니다."
+                    .formatted(rows.size(), formatValue(first.get("user_name")), formatValue(first.get("role_name")),
+                            formatValue(first.get("is_active")));
+            case ROLE_INFO -> "역할 %d건이 조회됩니다. 우선 %s(%s)는 권한 %s개를 포함합니다."
+                    .formatted(rows.size(), formatValue(first.get("role_name")), formatValue(first.get("role_code")),
+                            formatValue(first.get("permission_count")));
+            case CLIENT_INFO -> "고객사 %d건이 조회됩니다. 우선 %s의 활성 상태는 %s입니다."
+                    .formatted(rows.size(), formatValue(first.get("client_name")), formatValue(first.get("is_active")));
         };
     }
 
@@ -630,6 +724,14 @@ public class WorkQueryService {
             case INBOUND_STATUS -> "%s 조회되는 입고 작업이 없습니다.".formatted(topic);
             case OUTBOUND_STATUS -> "%s 조회되는 출고 작업이 없습니다.".formatted(topic);
             case LOW_STOCK -> "현재 부족 위험 재고가 없습니다.";
+            case PRODUCT_INFO -> "조건에 맞는 상품 기준 정보를 찾지 못했습니다.";
+            case WAREHOUSE_INFO -> "조건에 맞는 창고 기준 정보를 찾지 못했습니다.";
+            case LOCATION_INFO -> "조건에 맞는 구역/랙/로케이션 정보를 찾지 못했습니다.";
+            case SUPPLIER_INFO -> "조건에 맞는 공급사 정보를 찾지 못했습니다.";
+            case STORE_INFO -> "조건에 맞는 매장/출고처 정보를 찾지 못했습니다.";
+            case USER_INFO -> "조건에 맞는 사용자 계정 정보를 찾지 못했습니다.";
+            case ROLE_INFO -> "조건에 맞는 역할/권한 정보를 찾지 못했습니다.";
+            case CLIENT_INFO -> "조건에 맞는 고객사 정보를 찾지 못했습니다.";
             case INVENTORY_LOCATION -> {
                 String product = extractProductKeyword(question);
                 if (product.isBlank()) {
@@ -652,17 +754,18 @@ public class WorkQueryService {
 
     private String assigneeActionPhrase(Map<String, Object> row) {
         String name = formatValue(row.get("assigned_to_name"));
-        String loginId = formatValue(row.get("assigned_to_login_id"));
-        if ("-".equals(name) && "-".equals(loginId)) {
+        if ("-".equals(name)) {
             return "";
         }
-        if ("-".equals(loginId)) {
-            return " 담당자 %s가".formatted(name);
-        }
-        if ("-".equals(name)) {
-            return " 담당자 계정 %s로".formatted(loginId);
-        }
-        return " 담당자 %s(%s)가".formatted(name, loginId);
+        return " 담당자 %s가".formatted(name);
+    }
+
+    private boolean isHiddenAnswerField(String key) {
+        return "assigned_to".equals(key)
+                || "assigned_to_login_id".equals(key)
+                || "login_id".equals(key)
+                || "email".equals(key)
+                || "phone".equals(key);
     }
 
     private boolean isActionQuestion(String question) {
@@ -689,13 +792,6 @@ public class WorkQueryService {
 	                .trim();
 	        return keyword.replaceAll("(은|는|이|가|을|를|도|에)$", "").trim();
 	    }
-
-    private boolean isProductOutboundHowToQuestion(String question) {
-        String q = normalize(question).toLowerCase(Locale.ROOT);
-        return hasAny(q, "출고", "출하", "배송")
-                && hasAny(q, "어떻게", "방법", "절차", "원해", "하려", "하고 싶", "해")
-                && !extractProductKeyword(question).isBlank();
-    }
 
 	    private boolean shouldTrustCurrentProductKeyword(String question, String extracted) {
 	        if (extracted.isBlank()) {
@@ -775,15 +871,27 @@ public class WorkQueryService {
     }
 
     private Map<String, String> baseSlots(String question) {
-        return Map.of("date", extractDateKeyword(question));
+        return Map.of(
+                "keyword", extractKeyword(question),
+                "date", extractDateKeyword(question)
+        );
     }
 
     private Map<String, String> inventorySlots(String question) {
         return Map.of(
+                "keyword", extractProductKeyword(question),
                 "product", extractProductKeyword(question),
                 "warehouse", extractWarehouseKeyword(question),
                 "date", ""
         );
+    }
+
+    private String extractKeyword(String question) {
+        return normalize(question)
+                .replaceAll("(?i)알려줘|조회|정보|목록|어디|있어|있나요|몇\\s*개|몇개|보여줘|찾아줘|찾아|현재|상태", " ")
+                .replaceAll("[?？!！.,]", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
     }
 
     private String extractDateKeyword(String question) {
@@ -900,6 +1008,15 @@ public class WorkQueryService {
         return isBlank(value) ? null : value;
     }
 
+    private String firstNonBlank(String... values) {
+        for (String value : values) {
+            if (!isBlank(value)) {
+                return value;
+            }
+        }
+        return "";
+    }
+
     private String mask(String value) {
         if (isBlank(value) || value.length() < 8) return value;
         return value.substring(0, 8) + "...";
@@ -913,13 +1030,27 @@ public class WorkQueryService {
         return (System.nanoTime() - startedAt) / 1_000_000;
     }
 
+    private enum WorkQueryTarget {
+        STOCK,
+        MASTER,
+        ACCOUNT
+    }
+
     private enum Intent {
         MY_PICKING_TASKS("내 피킹 작업 조회"),
         PENDING_WORK("처리 필요 지시서 조회"),
         INBOUND_STATUS("입고 현황 조회"),
         OUTBOUND_STATUS("출고 현황 조회"),
         INVENTORY_LOCATION("상품 재고 위치 조회"),
-        LOW_STOCK("부족 재고 조회");
+        LOW_STOCK("부족 재고 조회"),
+        PRODUCT_INFO("상품 기준 정보 조회"),
+        WAREHOUSE_INFO("창고 기준 정보 조회"),
+        LOCATION_INFO("구역/랙/로케이션 기준 정보 조회"),
+        SUPPLIER_INFO("공급사 기준 정보 조회"),
+        STORE_INFO("매장/출고처 기준 정보 조회"),
+        USER_INFO("사용자 계정 조회"),
+        ROLE_INFO("역할/권한 조회"),
+        CLIENT_INFO("고객사 조회");
 
         private final String label;
 
@@ -930,6 +1061,7 @@ public class WorkQueryService {
 
     public record WorkQueryResponse(
             String question,
+            String target,
             String intent,
             String answer,
             List<Map<String, Object>> rows,
@@ -948,17 +1080,25 @@ public class WorkQueryService {
     private record FollowUpResult(Intent intent, List<Map<String, Object>> rows) {
     }
 
-    private record RouteResult(Intent intent, double confidence, Map<String, String> slots, String source) {
+    private record RouteResult(WorkQueryTarget target, Intent intent, double confidence, Map<String, String> slots, String source) {
         private static RouteResult heuristic(Intent intent, Map<String, String> slots) {
-            return new RouteResult(intent, 1.0, slots, "heuristic");
+            return new RouteResult(defaultTargetStatic(intent), intent, 1.0, slots, "heuristic");
         }
 
         private static RouteResult fallback(Intent intent, Map<String, String> slots) {
-            return new RouteResult(intent, 0.0, slots, "fallback");
+            return new RouteResult(defaultTargetStatic(intent), intent, 0.0, slots, "fallback");
         }
 
         private static RouteResult followUp(Intent intent) {
-            return new RouteResult(intent, 1.0, Map.of(), "followUp");
+            return new RouteResult(defaultTargetStatic(intent), intent, 1.0, Map.of(), "followUp");
+        }
+
+        private static WorkQueryTarget defaultTargetStatic(Intent intent) {
+            return switch (intent) {
+                case PRODUCT_INFO, WAREHOUSE_INFO, LOCATION_INFO, SUPPLIER_INFO, STORE_INFO -> WorkQueryTarget.MASTER;
+                case USER_INFO, ROLE_INFO, CLIENT_INFO -> WorkQueryTarget.ACCOUNT;
+                default -> WorkQueryTarget.STOCK;
+            };
         }
     }
 }

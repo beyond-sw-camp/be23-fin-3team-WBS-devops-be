@@ -1,0 +1,928 @@
+{
+  "info": {
+    "_postman_id": "6dc11c1e-35d4-45b0-bc02-0d6b8d45f001",
+    "name": "WBS AI Chatbot API",
+    "description": "챗봇 담당 범위 전용 Postman Collection. Gateway prefix는 /ai-service, 내부 업무 조회 테스트용 stock endpoint는 /stock-service 를 사용합니다.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "01. Chat Router - 프론트 메인 API",
+      "item": [
+        {
+          "name": "POST 통합 챗봇 질문 - 업무 데이터 질문",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "X-Client-Id",
+                "value": "{{clientId}}"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "{{userId}}"
+              },
+              {
+                "key": "X-User-Name",
+                "value": "{{userName}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "{{userRole}}"
+              },
+              {
+                "key": "X-Is-Developer",
+                "value": "{{isDeveloper}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/ai-service/chat/ask",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ai-service",
+                "chat",
+                "ask"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"마우스 재고 어디에 있어?\",\n  \"userName\": \"{{userName}}\",\n  \"history\": [],\n  \"context\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "프론트에서 기본적으로 호출할 메인 챗봇 API입니다. 질문 분류 후 WORK_QUERY/RAG/GENERAL 중 하나로 라우팅합니다. 관리자 권한 헤더가 필요합니다."
+          },
+          "response": []
+        },
+        {
+          "name": "POST 통합 챗봇 질문 - RAG 실패 원인 질문",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "X-Client-Id",
+                "value": "{{clientId}}"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "{{userId}}"
+              },
+              {
+                "key": "X-User-Name",
+                "value": "{{userName}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "{{userRole}}"
+              },
+              {
+                "key": "X-Is-Developer",
+                "value": "{{isDeveloper}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/ai-service/chat/ask",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ai-service",
+                "chat",
+                "ask"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"출고지시서 생성 실패 원인 알려줘\",\n  \"userName\": \"{{userName}}\",\n  \"history\": [],\n  \"context\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST 통합 챗봇 질문 - 이전 대화 포함",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "X-Client-Id",
+                "value": "{{clientId}}"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "{{userId}}"
+              },
+              {
+                "key": "X-User-Name",
+                "value": "{{userName}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "{{userRole}}"
+              },
+              {
+                "key": "X-Is-Developer",
+                "value": "{{isDeveloper}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/ai-service/chat/ask",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ai-service",
+                "chat",
+                "ask"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"그럼 피킹 리스트는 왜 생성이 안 돼?\",\n  \"userName\": \"{{userName}}\",\n  \"history\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"출고 지시서 생성 실패 원인 알려줘\"\n    },\n    {\n      \"role\": \"assistant\",\n      \"content\": \"출고 지시서 생성 실패는 가용 재고, 출고 창고, 상품 활성 여부를 먼저 확인합니다.\"\n    }\n  ],\n  \"context\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST 통합 챗봇 라우트 별칭",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "X-Client-Id",
+                "value": "{{clientId}}"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "{{userId}}"
+              },
+              {
+                "key": "X-User-Name",
+                "value": "{{userName}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "{{userRole}}"
+              },
+              {
+                "key": "X-Is-Developer",
+                "value": "{{isDeveloper}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/ai-service/chat/route",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ai-service",
+                "chat",
+                "route"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"오늘 처리할 작업 있어?\",\n  \"history\": [],\n  \"context\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "02. RAG Chat - 운영 문서 기반 답변",
+      "item": [
+        {
+          "name": "GET RAG 질문",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "X-Client-Id",
+                "value": "{{clientId}}"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "{{userId}}"
+              },
+              {
+                "key": "X-User-Name",
+                "value": "{{userName}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "{{userRole}}"
+              },
+              {
+                "key": "X-Is-Developer",
+                "value": "{{isDeveloper}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/ai-service/rag/chat?q=출고지시서 생성 실패 원인 알려줘&category=wms-ui-guide",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ai-service",
+                "rag",
+                "chat?q=출고지시서 생성 실패 원인 알려줘&category=wms-ui-guide"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "출고지시서 생성 실패 원인 알려줘"
+                },
+                {
+                  "key": "category",
+                  "value": "wms-ui-guide"
+                }
+              ]
+            },
+            "description": "문서 기반 답변 테스트용 GET API입니다."
+          },
+          "response": []
+        },
+        {
+          "name": "POST RAG 질문 + 대화 이력",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "X-Client-Id",
+                "value": "{{clientId}}"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "{{userId}}"
+              },
+              {
+                "key": "X-User-Name",
+                "value": "{{userName}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "{{userRole}}"
+              },
+              {
+                "key": "X-Is-Developer",
+                "value": "{{isDeveloper}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/ai-service/rag/chat",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ai-service",
+                "rag",
+                "chat"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"피킹 리스트 생성 실패 시 무엇을 확인해야 해?\",\n  \"category\": \"wms-ui-guide\",\n  \"history\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"출고 지시서 생성 실패 원인 알려줘\"\n    },\n    {\n      \"role\": \"assistant\",\n      \"content\": \"출고 지시서 생성 실패는 가용 재고, 출고 창고, 상품 활성 여부를 먼저 확인합니다.\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET RAG 스트리밍",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "X-Client-Id",
+                "value": "{{clientId}}"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "{{userId}}"
+              },
+              {
+                "key": "X-User-Name",
+                "value": "{{userName}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "{{userRole}}"
+              },
+              {
+                "key": "X-Is-Developer",
+                "value": "{{isDeveloper}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/ai-service/rag/chat/stream?q=재고 실사 완료가 실패하는 이유 알려줘&category=wms-ui-guide",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ai-service",
+                "rag",
+                "chat",
+                "stream?q=재고 실사 완료가 실패하는 이유 알려줘&category=wms-ui-guide"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "재고 실사 완료가 실패하는 이유 알려줘"
+                },
+                {
+                  "key": "category",
+                  "value": "wms-ui-guide"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "POST RAG 스트리밍 + 대화 이력",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "X-Client-Id",
+                "value": "{{clientId}}"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "{{userId}}"
+              },
+              {
+                "key": "X-User-Name",
+                "value": "{{userName}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "{{userRole}}"
+              },
+              {
+                "key": "X-Is-Developer",
+                "value": "{{isDeveloper}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/ai-service/rag/chat/stream",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ai-service",
+                "rag",
+                "chat",
+                "stream"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"마스터 데이터 저장 실패 원인 알려줘\",\n  \"category\": \"wms-ui-guide\",\n  \"history\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "03. RAG Ingest - 벡터 DB 문서 적재",
+      "item": [
+        {
+          "name": "POST 운영 가이드 문서 적재",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "X-Client-Id",
+                "value": "{{clientId}}"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "{{userId}}"
+              },
+              {
+                "key": "X-User-Name",
+                "value": "{{userName}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "{{userRole}}"
+              },
+              {
+                "key": "X-Is-Developer",
+                "value": "{{isDeveloper}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/ai-service/rag/ingest",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ai-service",
+                "rag",
+                "ingest"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"문서: WMS 화면 사용 가이드\\n영역: 출고 지시서 생성 실패\\n화면 경로: 출고 관리 > 출고 지시서\\n운영 안내:\\n- 가용 수량이 부족하면 출고 지시서 생성 또는 승인이 실패할 수 있다.\\n- 예약 수량이 많으면 총 재고가 있어도 신규 출고에 사용할 수 없다.\",\n  \"metadata\": {\n    \"source\": \"wms-ui-guide\",\n    \"category\": \"wms-ui-guide\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "문서를 pgvector vector_store에 저장합니다. 같은 metadata.source로 호출하면 기존 청크 삭제 후 새로 저장됩니다."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "04. Work Query - 업무 데이터 질문 디버깅",
+      "item": [
+        {
+          "name": "POST 업무 데이터 질문",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "X-Client-Id",
+                "value": "{{clientId}}"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "{{userId}}"
+              },
+              {
+                "key": "X-User-Name",
+                "value": "{{userName}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "{{userRole}}"
+              },
+              {
+                "key": "X-Is-Developer",
+                "value": "{{isDeveloper}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/ai-service/work-query/ask",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ai-service",
+                "work-query",
+                "ask"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"마우스 재고 어디에 있어?\",\n  \"history\": [],\n  \"context\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Chat Router를 거치지 않고 업무 데이터 조회 흐름만 직접 테스트합니다."
+          },
+          "response": []
+        },
+        {
+          "name": "POST 업무 데이터 후속 질문",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "X-Client-Id",
+                "value": "{{clientId}}"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "{{userId}}"
+              },
+              {
+                "key": "X-User-Name",
+                "value": "{{userName}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "{{userRole}}"
+              },
+              {
+                "key": "X-Is-Developer",
+                "value": "{{isDeveloper}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/ai-service/work-query/ask",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ai-service",
+                "work-query",
+                "ask"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"message\": \"하위는?\",\n  \"history\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"창고별 재고 상위 5개 보여줘\"\n    }\n  ],\n  \"context\": {\n    \"intent\": \"INVENTORY_LOCATION\",\n    \"answer\": \"서울중앙창고에 재고가 가장 많습니다.\",\n    \"rows\": [\n      {\n        \"product_name\": \"유선 마우스\",\n        \"warehouse_name\": \"서울중앙창고\",\n        \"available_qty\": 34\n      }\n    ]\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "05. Internal Stock Work Query - 내부 API",
+      "item": [
+        {
+          "name": "POST stock-service 업무 조회 실행",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "X-Client-Id",
+                "value": "{{clientId}}"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "{{userId}}"
+              },
+              {
+                "key": "X-User-Name",
+                "value": "{{userName}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "{{userRole}}"
+              },
+              {
+                "key": "X-Is-Developer",
+                "value": "{{isDeveloper}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/stock-service/ai/work-query/execute",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock-service",
+                "ai",
+                "work-query",
+                "execute"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intent\": \"INVENTORY_LOCATION\",\n  \"slots\": {\n    \"product\": \"마우스\",\n    \"warehouse\": \"\"\n  },\n  \"limit\": 8\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "ai-service가 Feign으로 호출하는 내부 API입니다. 프론트 직접 호출용보다는 디버깅용입니다."
+          },
+          "response": []
+        },
+        {
+          "name": "POST stock-service 오늘 처리 업무 조회",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "X-Client-Id",
+                "value": "{{clientId}}"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "{{userId}}"
+              },
+              {
+                "key": "X-User-Name",
+                "value": "{{userName}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "{{userRole}}"
+              },
+              {
+                "key": "X-Is-Developer",
+                "value": "{{isDeveloper}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/stock-service/ai/work-query/execute",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "stock-service",
+                "ai",
+                "work-query",
+                "execute"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intent\": \"PENDING_WORK\",\n  \"slots\": {\n    \"date\": \"today\"\n  },\n  \"limit\": 8\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "06. Smoke Test",
+      "item": [
+        {
+          "name": "GET AI ping",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "X-Client-Id",
+                "value": "{{clientId}}"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "{{userId}}"
+              },
+              {
+                "key": "X-User-Name",
+                "value": "{{userName}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "{{userRole}}"
+              },
+              {
+                "key": "X-Is-Developer",
+                "value": "{{isDeveloper}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/ai-service/ping?q=한국어로 한 문장만 인사해줘",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ai-service",
+                "ping?q=한국어로 한 문장만 인사해줘"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "한국어로 한 문장만 인사해줘"
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "GET AI ping stream",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "X-Client-Id",
+                "value": "{{clientId}}"
+              },
+              {
+                "key": "X-User-Id",
+                "value": "{{userId}}"
+              },
+              {
+                "key": "X-User-Name",
+                "value": "{{userName}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "{{userRole}}"
+              },
+              {
+                "key": "X-Is-Developer",
+                "value": "{{isDeveloper}}",
+                "disabled": true
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/ai-service/ping/stream?q=한국어로 짧게 인사해줘",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "ai-service",
+                "ping",
+                "stream?q=한국어로 짧게 인사해줘"
+              ],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "한국어로 짧게 인사해줘"
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "clientId",
+      "value": "01935c00-0000-7000-8000-000000000001"
+    },
+    {
+      "key": "userId",
+      "value": "01935c00-0000-7000-8000-000000000101"
+    },
+    {
+      "key": "userName",
+      "value": "관리자"
+    },
+    {
+      "key": "userRole",
+      "value": "ADMIN"
+    },
+    {
+      "key": "isDeveloper",
+      "value": "false"
+    }
+  ]
+}
