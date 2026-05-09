@@ -55,6 +55,8 @@ import java.util.UUID;
 @Service
 @Transactional(readOnly = true)
 public class InboundService {
+    private static final String NORMAL_WAREHOUSE_TYPE = "NORMAL";
+
 
     private final ErpPurchaseOrderRepository erpPurchaseOrderRepository;
     private final ErpPurchaseOrderItemRepository erpPurchaseOrderItemRepository;
@@ -217,6 +219,23 @@ public class InboundService {
             }
         }
         return map;
+    }
+
+    /**
+     * 일반 입고(발주서 기반 / 수동 생성)는 NORMAL 창고에서만 허용한다.
+     * 반품/폐기 전용 창고는 별도 흐름에서만 사용한다.
+     */
+    private void validateNormalInboundWarehouse(UUID warehouseId, UUID clientId) {
+        WarehouseResDto warehouse = masterServiceClient.getWarehouse(warehouseId, clientId.toString());
+        if (warehouse == null) {
+            throw new NoSuchElementException("창고를 찾을 수 없습니다.");
+        }
+        if (Boolean.FALSE.equals(warehouse.getIsActive())) {
+            throw new IllegalStateException("비활성 창고에는 입고지시서를 생성할 수 없습니다.");
+        }
+        if (!NORMAL_WAREHOUSE_TYPE.equals(warehouse.getWarehouseType())) {
+            throw new IllegalArgumentException("일반 입고는 정상창고에서만 생성할 수 있습니다.");
+        }
     }
 
     /**
@@ -561,6 +580,8 @@ public class InboundService {
      */
     @Transactional
     public InboundOrderResDto createFromAsn(UUID asnId, UUID warehouseId, UUID clientId, UUID userId) {
+        validateNormalInboundWarehouse(warehouseId, clientId);
+
         // 1. ASN(발주서) 조회
         ErpPurchaseOrders asn = erpPurchaseOrderRepository.findById(asnId)
                 .orElseThrow(() -> new NoSuchElementException("ASN을 찾을 수 없습니다."));
@@ -637,6 +658,7 @@ public class InboundService {
         // 2. 입고 지시서 생성 (draft 상태)
         UUID supplierId = dto.getSupplierId();
         UUID warehouseId = dto.getWarehouseId();
+        validateNormalInboundWarehouse(warehouseId, clientId);
 
         // 2-0. 입고처 ↔ 상품 supplier 일치 검증 (생성 시점에 데이터 정합성 차단)
         // 자사(공급자 null) 상품을 외부 협력사로 받거나, 외부 상품을 자사로 받는 케이스 모두 차단.
