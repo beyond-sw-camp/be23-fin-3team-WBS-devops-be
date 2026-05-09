@@ -72,6 +72,10 @@ spec:
           value: "120000"
         - name: STOCK_SERVICE_URL
           value: http://stock-service
+        - name: MASTER_SERVICE_URL
+          value: http://master-service
+        - name: ACCOUNT_SERVICE_URL
+          value: http://account-service
         resources:
           limits:
             cpu: "1"

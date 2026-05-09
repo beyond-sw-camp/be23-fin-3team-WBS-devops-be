@@ -26,7 +26,8 @@ public class ChatRoutingService {
     );
 
     private static final Pattern RAG_HINT = Pattern.compile(
-            "(?i)(어떻게|방법|절차|프로세스|매뉴얼|sop|가이드|설명|의미|정의|정책|규정|기준|원칙|왜|차이|주의)"
+            "(?i)(어떻게|방법|절차|프로세스|매뉴얼|sop|가이드|설명|의미|정의|정책|규정|기준|원칙|왜|차이|주의|" +
+                    "어디서|어디에서|어느\\s*화면|화면|메뉴|경로|사진|증빙|첨부|파일)"
     );
 
     private static final Pattern SHORT_FOLLOW_UP = Pattern.compile(
@@ -43,6 +44,14 @@ public class ChatRoutingService {
             "(?i).*(나\\s*누구|난\\s*누구|나는\\s*누구|내가\\s*누구).*"
     );
 
+    private static final Pattern SENSITIVE_INFO_HINT = Pattern.compile(
+            "(?i).*(주민\\s*등록|주민번호|외국인\\s*등록|여권|운전\\s*면허|비밀번호|password|passwd|pwd|" +
+                    "토큰|token|api\\s*key|secret|인증번호|otp|로그인\\s*아이디|login\\s*id|login_id|계좌|카드\\s*번호|전화번호|휴대폰|핸드폰|연락처|" +
+                    "이메일|email|메일주소|주소|집주소|생년월일|나이|개인정보|민감정보).*"
+    );
+
+    private static final String SENSITIVE_BLOCK_ANSWER = "해당 정보는 개인 정보에 해당되어 답변이 불가합니다.";
+
     private final OpenAiChatGateway openAiChatGateway;
     private final RagChatService ragChatService;
     private final WorkQueryService workQueryService;
@@ -57,6 +66,13 @@ public class ChatRoutingService {
         long startedAt = System.nanoTime();
         List<ChatTurn> safeHistory = history == null ? List.of() : history;
         String normalizedQuestion = normalize(question);
+
+        SensitiveDecision sensitiveDecision = classifySensitive(normalizedQuestion, safeHistory);
+        if (sensitiveDecision.blocked()) {
+            log.info("[AI_CHAT_ROUTE] mode=BLOCKED, reason={}, clientId={}, userId={}, question='{}'",
+                    sensitiveDecision.reason(), mask(clientId), mask(userId), normalizedQuestion);
+            return RouteResult.blocked(sensitiveDecision.reason(), SENSITIVE_BLOCK_ANSWER, elapsedMs(startedAt));
+        }
 
         ClassificationDecision decision = classify(normalizedQuestion, safeHistory, context);
         log.info("[AI_CHAT_ROUTE] mode={}, reason={}, clientId={}, userId={}, question='{}'",
@@ -91,16 +107,17 @@ public class ChatRoutingService {
                         elapsedMs(startedAt)
                 );
             } catch (Exception e) {
-                log.warn("[AI_CHAT_ROUTE_FALLBACK] from=WORK_QUERY, to=RAG, reason={}, question='{}'",
+                log.warn("[AI_CHAT_ROUTE_ERROR] mode=WORK_QUERY, reason={}, question='{}'",
                         e.getMessage(), normalizedQuestion);
-                String fallbackAnswer = safeRagFallback(normalizedQuestion, safeHistory);
-                return RouteResult.rag(
-                        ChatMode.WORK_QUERY,
-                        "fallback_rag_after_work_query_error",
+                return RouteResult.workQuery(
+                        decision.reason(),
                         true,
                         "work_query_failed",
                         true,
-                        fallbackAnswer,
+                        "현재 업무 데이터를 조회하지 못했습니다. 잠시 후 다시 시도하거나 해당 화면에서 조건을 직접 확인해주세요.",
+                        null,
+                        List.of(),
+                        false,
                         elapsedMs(startedAt)
                 );
             }
@@ -160,14 +177,80 @@ public class ChatRoutingService {
             return guardLlmDecision(llmDecision, workQueryHint, ragHint, followUpHint);
         } catch (Exception e) {
             log.warn("[AI_CHAT_ROUTE] llm_classification_failed question='{}', reason={}", question, e.getMessage());
-            if (followUpHint || workQueryHint) {
-                return new ClassificationDecision(ChatMode.WORK_QUERY, "fallback_work_query_after_llm_error");
-            }
             if (ragHint) {
                 return new ClassificationDecision(ChatMode.RAG, "fallback_rag_after_llm_error");
             }
+            if (followUpHint || workQueryHint) {
+                return new ClassificationDecision(ChatMode.WORK_QUERY, "fallback_work_query_after_llm_error");
+            }
             return new ClassificationDecision(ChatMode.GENERAL, "fallback_general_after_llm_error");
         }
+    }
+
+    private SensitiveDecision classifySensitive(String question, List<ChatTurn> history) {
+        if (question.isBlank()) {
+            return new SensitiveDecision(false, "sensitive_blank_question");
+        }
+
+        boolean sensitiveHint = SENSITIVE_INFO_HINT.matcher(question).matches();
+        if (!sensitiveHint) {
+            return new SensitiveDecision(false, "sensitive_no_hint");
+        }
+
+        try {
+            SensitiveDecision decision = classifySensitiveWithLlm(question, history);
+            if (decision.blocked()) {
+                return decision;
+            }
+            return new SensitiveDecision(false, decision.reason());
+        } catch (Exception e) {
+            log.warn("[AI_CHAT_ROUTE] sensitive_classification_failed question='{}', reason={}", question, e.getMessage());
+            return new SensitiveDecision(true, "sensitive_heuristic_after_llm_error");
+        }
+    }
+
+    private SensitiveDecision classifySensitiveWithLlm(String question, List<ChatTurn> history) {
+        String prompt = """
+                너는 WMS 챗봇의 개인정보/민감정보 차단 분류기다.
+                사용자의 현재 질문이 개인정보 또는 민감정보의 조회/노출/추출을 요구하면 BLOCK을 출력한다.
+                그렇지 않으면 ALLOW를 출력한다.
+
+                [반드시 BLOCK]
+                - 주민등록번호, 외국인등록번호, 여권번호, 운전면허번호
+                - 비밀번호, 토큰, API Key, Secret, 인증번호, OTP
+                - 로그인 아이디처럼 개인 계정 식별자를 특정 사용자 기준으로 알려달라는 질문
+                - 개인 전화번호, 휴대폰 번호, 연락처, 개인 이메일, 집주소, 생년월일
+                - 계좌번호, 카드번호, 급여, 개인 신상정보
+                - 특정 직원/사용자/관리자의 위 항목을 알려달라는 질문
+                - "마스킹 없이", "전체", "원문", "전부 보여줘"처럼 개인정보 노출을 요구하는 질문
+
+                [ALLOW]
+                - 재고 위치, 입고/출고 현황, 작업 목록, 지시서 상태
+                - 상품, 창고, 구역, 랙, 로케이션, 공급사, 매장 같은 업무 기준 정보
+                - 사용자 역할명/권한 정책처럼 개인 연락처나 인증정보를 노출하지 않는 관리 정보
+                - 개인정보 처리 방법/보안 정책에 대한 일반 설명
+
+                규칙:
+                - 반드시 BLOCK 또는 ALLOW 중 한 단어만 출력한다.
+                - 애매하면 BLOCK.
+                - 설명, JSON, markdown 금지.
+
+                최근 대화:
+                %s
+
+                [현재 질문]
+                %s
+                """.formatted(formatHistory(history).isBlank() ? "(없음)" : formatHistory(history), question);
+
+        String response = openAiChatGateway.complete(prompt, question);
+        String normalized = normalize(response).toUpperCase(Locale.ROOT);
+        if (normalized.contains("BLOCK")) {
+            return new SensitiveDecision(true, "llm_sensitive_block");
+        }
+        if (normalized.contains("ALLOW")) {
+            return new SensitiveDecision(false, "llm_sensitive_allow");
+        }
+        return new SensitiveDecision(true, "llm_sensitive_unrecognized_block");
     }
 
     private boolean isObviousGeneral(String question) {
@@ -188,11 +271,11 @@ public class ChatRoutingService {
         if (followUpHint && llmDecision.mode() == ChatMode.GENERAL) {
             return new ClassificationDecision(ChatMode.WORK_QUERY, llmDecision.reason() + "_guarded_followup");
         }
+        if (ragHint && llmDecision.mode() == ChatMode.GENERAL) {
+            return new ClassificationDecision(ChatMode.RAG, llmDecision.reason() + "_guarded_rag");
+        }
         if (workQueryHint && llmDecision.mode() == ChatMode.GENERAL) {
             return new ClassificationDecision(ChatMode.WORK_QUERY, llmDecision.reason() + "_guarded_work_query");
-        }
-        if (ragHint && !workQueryHint && llmDecision.mode() == ChatMode.GENERAL) {
-            return new ClassificationDecision(ChatMode.RAG, llmDecision.reason() + "_guarded_rag");
         }
         return llmDecision;
     }
@@ -208,12 +291,15 @@ public class ChatRoutingService {
                 - 예: 내 피킹 작업, 오늘 처리할 지시서, 입고/출고 현황, 재고 위치, 부족 재고
                 - DB에 있는 현재 상태/수량/목록/건수를 알아야 답할 수 있는 질문
                 - 상품/품목/창고/재고/지시서/피킹/입고/출고의 현재 상태를 묻는 질문
-                - 예: 마우스 어딨어, 마우스 위치 알려줘, 유선 마우스 출고 어떻게 해, 오늘 뭐해야돼, 5월 6일에 뭐해야돼
+                - 예: 마우스 어딨어, 마우스 위치 알려줘, 오늘 뭐해야돼, 5월 6일에 뭐해야돼
 
                 [RAG]
                 - pgvector 문서 검색 API를 호출해야 하는 질문
-                - 예: 화면 사용법, 상태값 의미, 업무 절차, 예외 처리 기준, 전자기기 보관 주의사항
+                - 예: 화면 사용법, 상태값 의미, 업무 절차, 예외 처리 기준, 전자기기 보관 주의사항, 작업 실패 원인
+                - 예: 불량 사진 어디서 봐, 증빙 파일 어디서 확인해, 어느 메뉴에서 봐?
                 - 운영 매뉴얼/FAQ/정책/기준을 근거로 답해야 하는 질문
+                - 특정 상품명이 있어도 "출고 어떻게 해", "왜 실패해?", "왜 안 돼?"처럼 방법/원인/절차를 묻는 질문은 RAG다.
+                - "어디서 봐?", "어느 화면?", "어느 메뉴?"처럼 화면 경로나 확인 위치를 묻는 질문은 RAG다.
 
                 [GENERAL]
                 - 인사, 감사, 챗봇 소개, 할 수 있는 일 안내처럼 DB나 문서 검색이 필요 없는 일반 대화
@@ -225,8 +311,8 @@ public class ChatRoutingService {
                 - 설명, JSON, markdown 금지.
                 - 짧은 후속 질문은 최근 대화 맥락을 보고 같은 기능으로 분류한다.
                 - 재고 위치/수량/존재 여부/오늘 할 일/지시서 목록은 말투가 짧거나 구어체여도 WORK_QUERY다.
-                - 특정 상품명이 포함된 "출고 어떻게/출고 방법" 질문은 재고 확인이 먼저 필요하므로 WORK_QUERY다.
-                - 방법/절차/기준/의미/왜를 묻는 설명형 질문은 RAG다.
+                - 방법/절차/기준/의미/왜/실패 원인을 묻는 설명형 질문은 RAG다.
+                - 현재 재고 위치/수량/존재 여부/작업 목록을 직접 묻는 질문만 WORK_QUERY다.
 
                 최근 대화:
                 %s
@@ -310,6 +396,9 @@ public class ChatRoutingService {
     private record ClassificationDecision(ChatMode mode, String reason) {
     }
 
+    private record SensitiveDecision(boolean blocked, String reason) {
+    }
+
     public record RouteResult(
             ChatMode mode,
             ChatMode originalMode,
@@ -338,6 +427,25 @@ public class ChatRoutingService {
                     fallbackApplied,
                     errorCode,
                     retryable,
+                    answer,
+                    null,
+                    List.of(),
+                    false,
+                    executionTimeMs
+            );
+        }
+
+        public static RouteResult blocked(
+                String routeReason,
+                String answer,
+                Long executionTimeMs) {
+            return new RouteResult(
+                    ChatMode.BLOCKED,
+                    ChatMode.BLOCKED,
+                    routeReason,
+                    false,
+                    "sensitive_info_blocked",
+                    false,
                     answer,
                     null,
                     List.of(),
