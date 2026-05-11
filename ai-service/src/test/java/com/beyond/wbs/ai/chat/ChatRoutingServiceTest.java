@@ -105,6 +105,155 @@ class ChatRoutingServiceTest {
     }
 
     @Test
+    void handlesOffensiveQuestionAsGeneralBoundaryMessage() {
+        ChatRoutingService.RouteResult result = chatRoutingService.route(
+                "시발 뭐야", List.of(), null, "client-1", "user-1", "관리자");
+
+        assertEquals(ChatMode.GENERAL, result.mode());
+        assertTrue(result.answer().contains("정중한 표현"));
+        verify(openAiChatGateway, never()).complete(anyString(), anyString());
+        verify(workQueryService, never()).ask(anyString(), anyList(), any(), anyString(), anyString());
+        verify(ragChatService, never()).ask(anyString(), any(), anyList());
+    }
+
+    @Test
+    void handlesLottoQuestionAsUnsupportedGeneral() {
+        ChatRoutingService.RouteResult result = chatRoutingService.route(
+                "로또 번호 추천해줘", List.of(), null, "client-1", "user-1", "관리자");
+
+        assertEquals(ChatMode.GENERAL, result.mode());
+        assertTrue(result.answer().contains("로또 번호 추천은 지원하지 않습니다"));
+        verify(openAiChatGateway, never()).complete(anyString(), anyString());
+    }
+
+    @Test
+    void handlesLunchMenuQuestionAsUnsupportedGeneral() {
+        ChatRoutingService.RouteResult result = chatRoutingService.route(
+                "점심 메뉴 추천해줘", List.of(), null, "client-1", "user-1", "관리자");
+
+        assertEquals(ChatMode.GENERAL, result.mode());
+        assertTrue(result.answer().contains("식사 메뉴 추천은 지원 범위 밖"));
+        verify(openAiChatGateway, never()).complete(anyString(), anyString());
+    }
+
+    @Test
+    void handlesDateQuestionWithoutWorkQuery() {
+        ChatRoutingService.RouteResult result = chatRoutingService.route(
+                "오늘 날짜 뭐야?", List.of(), null, "client-1", "user-1", "관리자");
+
+        assertEquals(ChatMode.GENERAL, result.mode());
+        assertTrue(result.answer().contains("오늘은"));
+        verify(workQueryService, never()).ask(anyString(), anyList(), any(), anyString(), anyString());
+    }
+
+    @Test
+    void handlesHolidayQuestionAsUnsupportedGeneral() {
+        ChatRoutingService.RouteResult result = chatRoutingService.route(
+                "오늘 휴무야?", List.of(), null, "client-1", "user-1", "관리자");
+
+        assertEquals(ChatMode.GENERAL, result.mode());
+        assertTrue(result.answer().contains("휴무나 근태 일정"));
+        verify(workQueryService, never()).ask(anyString(), anyList(), any(), anyString(), anyString());
+    }
+
+    @Test
+    void handlesSpellingQuestionAsUnsupportedGeneral() {
+        ChatRoutingService.RouteResult result = chatRoutingService.route(
+                "이 문장 맞춤법 검사해줘", List.of(), null, "client-1", "user-1", "관리자");
+
+        assertEquals(ChatMode.GENERAL, result.mode());
+        assertTrue(result.answer().contains("맞춤법 검사"));
+        verify(workQueryService, never()).ask(anyString(), anyList(), any(), anyString(), anyString());
+    }
+
+    @Test
+    void routesSessionExtensionQuestionToRag() {
+        when(openAiChatGateway.complete(anyString(), eq("시간 연장 어떻게 해?"))).thenReturn("GENERAL");
+        when(ragChatService.ask(eq("시간 연장 어떻게 해?"), eq(null), anyList()))
+                .thenReturn("상단 헤더의 남은 시간을 확인하고 저장 후 재로그인하세요.");
+
+        ChatRoutingService.RouteResult result = chatRoutingService.route(
+                "시간 연장 어떻게 해?", List.of(), null, "client-1", "user-1", "관리자");
+
+        assertEquals(ChatMode.RAG, result.mode());
+        assertEquals("llm_general_guarded_rag", result.routeReason());
+        assertTrue(result.answer().contains("남은 시간"));
+        verify(workQueryService, never()).ask(anyString(), anyList(), any(), anyString(), anyString());
+    }
+
+    @Test
+    void routesCodeAndLogoutQuestionsToRag() {
+        when(openAiChatGateway.complete(anyString(), eq("번호 생성 기준 알려줘"))).thenReturn("GENERAL");
+        when(ragChatService.ask(eq("번호 생성 기준 알려줘"), eq(null), anyList()))
+                .thenReturn("지시서 번호는 업무 prefix, 날짜, 일련번호 기준으로 생성됩니다.");
+
+        ChatRoutingService.RouteResult numberResult = chatRoutingService.route(
+                "번호 생성 기준 알려줘", List.of(), null, "client-1", "user-1", "관리자");
+
+        assertEquals(ChatMode.RAG, numberResult.mode());
+        assertTrue(numberResult.answer().contains("업무 prefix"));
+
+        when(openAiChatGateway.complete(anyString(), eq("로그아웃 방법 알려줘"))).thenReturn("GENERAL");
+        when(ragChatService.ask(eq("로그아웃 방법 알려줘"), eq(null), anyList()))
+                .thenReturn("우측 상단 사용자 메뉴에서 로그아웃을 선택하세요.");
+
+        ChatRoutingService.RouteResult logoutResult = chatRoutingService.route(
+                "로그아웃 방법 알려줘", List.of(), null, "client-1", "user-1", "관리자");
+
+        assertEquals(ChatMode.RAG, logoutResult.mode());
+        assertTrue(logoutResult.answer().contains("로그아웃"));
+    }
+
+    @Test
+    void routesErrorCodeManagementQuestionToRag() {
+        when(openAiChatGateway.complete(anyString(), eq("오류코드 관리는 어디서 해?"))).thenReturn("GENERAL");
+        when(ragChatService.ask(eq("오류코드 관리는 어디서 해?"), eq(null), anyList()))
+                .thenReturn("오류 메시지는 원래 화면과 공통 관리 > 감사 로그에서 확인합니다.");
+
+        ChatRoutingService.RouteResult result = chatRoutingService.route(
+                "오류코드 관리는 어디서 해?", List.of(), null, "client-1", "user-1", "관리자");
+
+        assertEquals(ChatMode.RAG, result.mode());
+        assertTrue(result.answer().contains("감사 로그"));
+        verify(workQueryService, never()).ask(anyString(), anyList(), any(), anyString(), anyString());
+    }
+
+    @Test
+    void routesOperationalTroubleshootingQuestionsToRag() {
+        List<String> questions = List.of(
+                "권한 없다고 뜨는데 왜 그래?",
+                "메뉴가 안 보여",
+                "알림이 안 와",
+                "파일 업로드 실패했어",
+                "불량 증빙 사진 어디서 봐?",
+                "입고 검수 완료가 안 돼",
+                "출고지시서 생성 실패 원인 알려줘",
+                "피킹 리스트가 안 만들어져",
+                "작업자 자동배정 왜 안 돼?",
+                "재고 수량이 화면마다 달라",
+                "세션 만료됐는데 작성하던 내용 사라졌어",
+                "엑셀 다운로드 어디서 해?",
+                "QR/바코드 다시 출력하고 싶어",
+                "공통코드 수정하면 어디에 영향 있어?",
+                "창고/로케이션 비활성화가 안 돼"
+        );
+
+        for (String question : questions) {
+            when(openAiChatGateway.complete(anyString(), eq(question))).thenReturn("GENERAL");
+            when(ragChatService.ask(eq(question), eq(null), anyList()))
+                    .thenReturn("운영 가이드 기준으로 원인과 조치 방법을 안내합니다.");
+
+            ChatRoutingService.RouteResult result = chatRoutingService.route(
+                    question, List.of(), null, "client-1", "user-1", "관리자");
+
+            assertEquals(ChatMode.RAG, result.mode(), question);
+            assertTrue(result.answer().contains("운영 가이드"), question);
+        }
+
+        verify(workQueryService, never()).ask(anyString(), anyList(), any(), anyString(), anyString());
+    }
+
+    @Test
     void keepsWorkQueryModeForShortFollowUpWithRowsContext() {
         List<Map<String, Object>> rows = List.of(Map.of("warehouse_name", "서울중앙창고", "total", 10));
         WorkQueryService.WorkQueryContext context = new WorkQueryService.WorkQueryContext(

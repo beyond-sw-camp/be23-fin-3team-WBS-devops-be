@@ -28,6 +28,7 @@ public class WorkQueryService {
 
     private static final int LIMIT = 8;
     private static final Pattern KOREAN_MONTH_DAY = Pattern.compile("(\\d{1,2})\\s*월\\s*(\\d{1,2})\\s*일");
+    private static final Pattern KOREAN_MONTH = Pattern.compile("(?<!\\d)(\\d{1,2})\\s*월(?!\\s*\\d{1,2}\\s*일)");
     private static final Pattern ISO_DATE = Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
 
     public WorkQueryService(
@@ -140,6 +141,7 @@ public class WorkQueryService {
 		                - product, warehouse, status, date는 질문에 있으면 채우고 없으면 빈 문자열.
 	                - INVENTORY_LOCATION은 현재 재고 위치 조회이므로 date는 항상 빈 문자열로 둔다.
                 - date는 가능하면 yyyy-MM-dd 형식으로 쓴다.
+                - "5월", "이번 달"처럼 월 단위 질문이면 slots.date_from, slots.date_to를 yyyy-MM-dd 형식으로 채운다.
                 - 오늘/금일은 date를 "today"로 쓴다.
                 - 상품/창고/구역/랙/로케이션/공급사/매장 같은 기준 정보는 MASTER다.
                 - 사용자/직원/관리자/역할/권한/회사 정보는 ACCOUNT다.
@@ -286,6 +288,9 @@ public class WorkQueryService {
         slots.put("warehouse", "");
         slots.put("status", "");
         slots.put("date", extractDateKeyword(question));
+        DateRange dateRange = extractDateRange(question);
+        slots.put("date_from", dateRange.from());
+        slots.put("date_to", dateRange.to());
         if (!(value instanceof Map<?, ?> raw)) {
             slots.put("keyword", extractKeyword(question));
             return slots;
@@ -297,6 +302,15 @@ public class WorkQueryService {
         String date = normalizeDateSlot(slotValue(raw, "date"), question);
         if (!date.isBlank()) {
             slots.put("date", date);
+        }
+        String dateFrom = normalizeDateSlot(slotValue(raw, "date_from"), "");
+        String dateTo = normalizeDateSlot(slotValue(raw, "date_to"), "");
+        if (!dateRange.from().isBlank()) {
+            slots.put("date_from", dateRange.from());
+            slots.put("date_to", dateRange.to());
+        } else {
+            slots.put("date_from", dateFrom);
+            slots.put("date_to", dateTo);
         }
         if (slots.get("keyword").isBlank()) {
             slots.put("keyword", firstNonBlank(slots.get("product"), slots.get("warehouse"), extractKeyword(question)));
@@ -873,7 +887,9 @@ public class WorkQueryService {
     private Map<String, String> baseSlots(String question) {
         return Map.of(
                 "keyword", extractKeyword(question),
-                "date", extractDateKeyword(question)
+                "date", extractDateKeyword(question),
+                "date_from", extractDateRange(question).from(),
+                "date_to", extractDateRange(question).to()
         );
     }
 
@@ -882,7 +898,9 @@ public class WorkQueryService {
                 "keyword", extractProductKeyword(question),
                 "product", extractProductKeyword(question),
                 "warehouse", extractWarehouseKeyword(question),
-                "date", ""
+                "date", "",
+                "date_from", "",
+                "date_to", ""
         );
     }
 
@@ -917,6 +935,34 @@ public class WorkQueryService {
             return LocalDate.of(today.getYear(), month, day).toString();
         }
         return "";
+    }
+
+    private DateRange extractDateRange(String question) {
+        String q = normalize(question);
+        LocalDate today = LocalDate.now();
+        if (q.contains("이번달") || q.contains("이번 달")) {
+            LocalDate firstDay = today.withDayOfMonth(1);
+            LocalDate lastDay = firstDay.withDayOfMonth(firstDay.lengthOfMonth());
+            return new DateRange(firstDay.toString(), lastDay.toString());
+        }
+        if (q.contains("다음달") || q.contains("다음 달")) {
+            LocalDate firstDay = today.plusMonths(1).withDayOfMonth(1);
+            LocalDate lastDay = firstDay.withDayOfMonth(firstDay.lengthOfMonth());
+            return new DateRange(firstDay.toString(), lastDay.toString());
+        }
+        if (q.contains("지난달") || q.contains("지난 달")) {
+            LocalDate firstDay = today.minusMonths(1).withDayOfMonth(1);
+            LocalDate lastDay = firstDay.withDayOfMonth(firstDay.lengthOfMonth());
+            return new DateRange(firstDay.toString(), lastDay.toString());
+        }
+        Matcher matcher = KOREAN_MONTH.matcher(q);
+        if (matcher.find()) {
+            int month = Integer.parseInt(matcher.group(1));
+            LocalDate firstDay = LocalDate.of(today.getYear(), month, 1);
+            LocalDate lastDay = firstDay.withDayOfMonth(firstDay.lengthOfMonth());
+            return new DateRange(firstDay.toString(), lastDay.toString());
+        }
+        return new DateRange("", "");
     }
 
     private String normalizeDateSlot(String value, String question) {
@@ -959,6 +1005,13 @@ public class WorkQueryService {
 
     private String requestedDateTopic(String question) {
         String label = requestedDateLabel(question);
+        if (label.isBlank()) {
+            DateRange range = extractDateRange(question);
+            if (!range.from().isBlank()) {
+                LocalDate from = LocalDate.parse(range.from());
+                label = from.getMonthValue() + "월";
+            }
+        }
         if (label.isBlank()) {
             return "현재는";
         }
@@ -1028,6 +1081,9 @@ public class WorkQueryService {
 
     private long elapsedMs(long startedAt) {
         return (System.nanoTime() - startedAt) / 1_000_000;
+    }
+
+    private record DateRange(String from, String to) {
     }
 
     private enum WorkQueryTarget {
