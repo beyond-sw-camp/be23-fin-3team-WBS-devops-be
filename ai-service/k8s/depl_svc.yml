@@ -45,7 +45,7 @@ spec:
         - name: RAG_SEARCH_SIMILARITY_THRESHOLD
           value: "0.35"
         - name: RAG_MIN_ANSWER_SIMILARITY
-          value: "0.45"
+          value: "0.40"
         - name: OPENAI_API_KEY
           valueFrom:
             secretKeyRef:

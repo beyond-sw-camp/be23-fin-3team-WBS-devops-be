@@ -35,4 +35,5 @@ public class PendingOrderItemDto {
     private Integer itemCount;
     private Integer totalQty;
     private LocalDateTime createdAt;
+    private UUID assignedTo;
 }
