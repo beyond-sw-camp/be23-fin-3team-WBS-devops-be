@@ -18,6 +18,7 @@ public class DocumentIngestService {
 
     private final VectorStore vectorStore;
     private final KnowledgeSectionParser sectionParser;
+    private final RagResponseCacheService responseCacheService;
 
     /**
      * 원문 텍스트를 섹션 인식 방식으로 인덱싱.
@@ -46,6 +47,7 @@ public class DocumentIngestService {
                 source, sections.size(), chunks.size());
 
         vectorStore.add(chunks);
+        evictResponseCacheBySource(source);
         return chunks.size();
     }
 
@@ -61,5 +63,19 @@ public class DocumentIngestService {
         FilterExpressionBuilder b = new FilterExpressionBuilder();
         vectorStore.delete(b.eq("source", source).build());
         log.info("upsert: deleted existing chunks (source={})", source);
+    }
+
+    private void evictResponseCacheBySource(String source) {
+        if (source == null || source.isBlank()) {
+            return;
+        }
+        try {
+            responseCacheService.evictBySource(source);
+            if (!"RAG".equalsIgnoreCase(source.trim())) {
+                responseCacheService.evictBySource("RAG");
+            }
+        } catch (Exception e) {
+            log.warn("[AI_RAG_CACHE_EVICT_SKIP] source={}, reason={}", source, e.getMessage());
+        }
     }
 }

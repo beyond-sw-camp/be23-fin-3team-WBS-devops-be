@@ -1,248 +1,371 @@
-# 개발 환경 세팅 & AI 기능 가이드
+# WMS AI 챗봇 구조화 라우팅 설계
 
-메인 README 가 "프로젝트 소개·팀 정보"라면, 이 문서는 **"코드를 처음 받은 사람이 바로 돌릴 수 있게"** 하는 실전 가이드다.
+## 관리자 업무를 이해하는 WMS AI 어시스턴트 이야기
 
----
+## 2026.05.12
 
-## 🏗 전체 아키텍처
+안녕하세요. WMS 프로젝트에서 AI 서비스와 관리자 화면을 개발하고 있는 3팀입니다.
 
-```
-┌──────────────────────────────────────────────────────────┐
-│                  React Frontend (별개 repo)               │
-└──────────────────────┬───────────────────────────────────┘
-                       │
-              ┌────────▼─────────┐
-              │  API Gateway     │  :8080
-              │  (Spring Cloud)  │
-              └────────┬─────────┘
-                       │
-      ┌────────────────┼────────────────┬─────────────────┐
-      ▼                ▼                ▼                 ▼
-  account-svc     master-svc       stock-svc         ai-service
-  (유저·권한)    (창고·제품)      (재고·주문)        (AI 기능)
-      │                │                │                 │
-      └────────────────┴────────────────┘                 │
-                       │                                  │
-              ┌────────▼─────────┐              ┌─────────▼─────────┐
-              │  MariaDB :3306   │              │  Postgres :5433   │
-              │  account_db      │              │  + pgvector       │
-              │  master_db       │              │  ai_db            │
-              │  stock_db        │              └─────────┬─────────┘
-              └──────────────────┘                        │
-                                                ┌────────▼────────┐
-                                                │  Ollama :11434  │
-                                                │  gemma4:e4b     │
-                                                │  bge-m3         │
-                                                └─────────────────┘
-```
+WMS는 입고, 검수, 적치, 피킹, 출고, 이동, 재고 실사처럼 현장과 관리자가 함께 움직이는 업무 시스템입니다. 사용자는 단순히 "챗봇이 답을 잘한다"보다 "현재 업무 상태를 제대로 이해하고, 지금 화면에서 다음에 무엇을 해야 하는지 알려준다"를 기대합니다.
+
+이번 문서는 현재 AI 챗봇을 어떤 구조로 설계했는지, 왜 기존 키워드 분기에서 구조화 라우팅으로 전환했는지, 그리고 로컬과 배포 환경에서 어떤 기준으로 운영하는지 정리합니다.
+
+## 개요 : WMS 업무 흐름과 AI 챗봇의 역할
 
 ---
 
-## ⚙️ 사전 요구사항
+WMS AI 챗봇은 관리자 전용 웹에서 동작합니다. 관리자가 재고, 지시서, 작업 상태, 화면 경로, 매뉴얼을 빠르게 확인하도록 돕는 업무 보조자에 가깝습니다.
 
-| 도구 | 버전 | 용도 |
+챗봇이 처리하는 질문은 크게 네 가지로 나뉩니다.
+
+| 구분 | 예시 | 처리 방식 |
 |---|---|---|
-| JDK | **17** (Amazon Corretto 권장) | 전 서비스 공통 |
-| Docker Desktop | 최신 | ai-postgres / Kafka / Elasticsearch 컨테이너 |
-| MariaDB | 10+ | 로컬 설치. `root` / `test1234`, 포트 3306 |
-| Ollama | 0.21+ | `brew install ollama` |
-| RAM | **최소 16GB**, 32GB 이상 권장 | gemma4:e4b + Postgres + JVM 여럿 동시 구동 |
-| 디스크 여유 | 30GB+ | 모델 파일 (bge-m3 1GB + gemma4:e4b 10GB + gemma4:26b 17GB 선택) |
+| 업무 데이터 질문 | "마우스 재고 어디 있어?", "오늘 처리할 작업 있어?" | 구조화 라우팅 후 업무 서비스 API 조회 |
+| 매뉴얼/절차 질문 | "출고 지시서 생성이 실패하는 이유 알려줘", "불량 사진 어디서 봐?" | Spring AI RAG 검색 후 답변 생성 |
+| 일반 안내 질문 | "너 누구야?", "도움말 보여줘" | 고정된 안내성 답변 |
+| 차단 대상 질문 | 개인정보, 인증정보, 업무 범위 밖 질문 | API/RAG 호출 없이 전용 문구 반환 |
+
+초기 구조에서는 특정 단어를 보고 바로 분기하는 방식이 많았습니다. 예를 들어 "점심"이라는 단어만 보고 식사 메뉴 관련 답변을 하거나, "넌 먹었냐"처럼 업무와 무관한 질문에도 어색한 챗봇 소개 답변이 나오는 문제가 있었습니다. 현재 구조는 이런 단어 단위 분기를 줄이고, 질문의 목적을 JSON으로 구조화해서 다음 처리 흐름을 결정합니다.
+
+## 기존 구조의 한계 : 키워드 분기만으로는 부족했습니다
 
 ---
 
-## 🚀 기동 순서
+키워드 분기는 빠르게 만들 수 있지만 WMS 업무 질문에는 한계가 뚜렷했습니다.
 
-### 1. 인프라 컨테이너 올리기
+첫째, 같은 단어라도 의도가 다릅니다. "마우스 출고 어떻게 해?"는 출고 절차를 묻는 질문이고, "마우스 출고 가능한 재고 있어?"는 현재 재고를 조회해야 하는 질문입니다. 둘 다 "마우스", "출고"라는 단어가 들어가지만 하나는 RAG, 하나는 업무 API 조회로 가야 합니다.
+
+둘째, 업무 범위 밖 질문을 자연스럽게 막기 어렵습니다. "점심 뭐 먹을까?"는 WMS와 무관하므로 답변하지 않는 편이 낫습니다. 그런데 단어 하나에 반응하면 오히려 챗봇이 이상한 방향으로 친절해집니다.
+
+셋째, Spring Boot가 모든 자연어 의도를 조건문으로 처리하려고 하면 유지보수가 어려워집니다. 질문 유형이 늘어날수록 정규식과 if 문이 복잡해지고, 새로운 예외를 추가할 때마다 다른 질문이 깨질 가능성이 커집니다.
+
+그래서 현재 설계는 Spring Boot가 자연어를 직접 "이해"하는 구조가 아니라, LLM이 질문을 구조화하고 Spring Boot가 검증과 업무 처리를 맡는 구조로 정리했습니다.
+
+## 구조화 라우팅 구축 : LLM은 판단하고 Spring Boot는 처리합니다
+
+---
+
+현재 챗봇의 핵심은 `ChatRoutingService`입니다. 이 서비스는 질문을 받은 뒤 바로 답변을 만들지 않습니다. 먼저 질문을 업무 시스템이 처리할 수 있는 형태로 바꿉니다.
+
+전체 흐름은 다음과 같습니다.
+
+```text
+사용자 질문
+  -> 민감정보/범위 차단 가드
+  -> LLM JSON Router
+  -> WORK_QUERY | RAG | GENERAL | UNSUPPORTED
+  -> 업무 API 조회 또는 RAG 검색
+  -> 답변 생성
+  -> 관리자 웹에 표시
+```
+
+LLM 라우터는 자연어 질문을 아래와 같은 JSON 형태로 반환합니다.
+
+```json
+{
+  "action": "WORK_QUERY",
+  "target": "STOCK",
+  "intent": "INVENTORY_LOCATION",
+  "slots": {
+    "product": "마우스",
+    "warehouse": "",
+    "status": "",
+    "date": ""
+  },
+  "confidence": 0.87,
+  "reason": "상품의 현재 재고 위치와 수량을 묻는 질문"
+}
+```
+
+중요한 점은 LLM이 직접 DB를 조회하거나 임의로 답을 지어내지 않는다는 것입니다. LLM은 질문을 구조화하고, Spring Boot는 그 결과를 검증한 뒤 허용된 업무 API만 호출합니다.
+
+### 1. 민감정보와 범위 밖 질문을 먼저 차단합니다
+
+가장 앞단에는 개인정보/민감정보 차단 로직이 있습니다. 주민등록번호, 비밀번호, 토큰, 인증번호, 개인 연락처, 개인 이메일, 로그인 아이디처럼 노출되면 안 되는 질문은 업무 API나 RAG로 보내지 않습니다.
+
+차단 답변은 고정 문구를 사용합니다.
+
+```text
+해당 정보는 개인 정보에 해당되어 답변이 불가합니다.
+```
+
+업무 범위 밖 질문도 별도로 막습니다. 예를 들어 식사 메뉴 추천, 사주, 복권, 챗봇의 개인 생활을 묻는 질문은 WMS 업무 보조의 범위를 벗어나므로 아래 문구로 정리합니다.
+
+```text
+해당 질문은 답변이 불가합니다. 업무, 매뉴얼 등 편하게 물어보세요.
+```
+
+이 단계가 앞에 있어야 불필요한 OpenAI 호출, 업무 API 호출, RAG 검색을 줄일 수 있습니다. 또한 관리자가 보기에 챗봇의 역할이 더 명확해집니다.
+
+### 2. LLM JSON Router가 질문을 구조화합니다
+
+민감정보와 범위 밖 질문이 아니라면 LLM 라우터가 질문을 분류합니다. 라우팅 결과는 `WORK_QUERY`, `RAG`, `GENERAL`, `UNSUPPORTED` 중 하나입니다.
+
+`WORK_QUERY`는 현재 시스템 상태를 확인해야 하는 질문입니다. 재고 위치, 작업 목록, 입고/출고 상태, 피킹 작업, 기준정보, 사용자 역할 같은 질문이 여기에 해당합니다.
+
+`RAG`는 문서 지식이 필요한 질문입니다. 화면 경로, 작업 절차, 상태값 의미, 실패 원인, 예외 처리 기준 같은 질문입니다.
+
+`GENERAL`은 챗봇 소개나 도움말처럼 별도 데이터가 필요 없는 질문입니다.
+
+`UNSUPPORTED`는 업무 범위 밖 질문입니다. 이 경우에도 답변 생성 LLM에 넘기지 않고 고정 문구를 반환합니다.
+
+### 3. 업무 데이터 질문은 서비스 API로 조회합니다
+
+`WORK_QUERY`로 분류되면 질문은 `WorkQueryService`로 전달됩니다. 이때 챗봇은 SQL을 직접 생성해서 운영 DB를 때리는 방식이 아니라, 각 도메인 서비스가 제공하는 API를 호출합니다.
+
+| 대상 | 담당 데이터 | 예시 intent |
+|---|---|---|
+| stock-service | 재고, 입고, 출고, 피킹, 미처리 작업 | `INVENTORY_LOCATION`, `PENDING_WORK`, `MY_PICKING_TASKS` |
+| master-service | 상품, 창고, 구역, 랙, 로케이션, 공급사, 매장 | `PRODUCT_INFO`, `WAREHOUSE_INFO`, `LOCATION_INFO` |
+| account-service | 사용자, 역할, 권한, 고객사 | `USER_INFO`, `ROLE_INFO`, `CLIENT_INFO` |
+
+이 방식은 Text-to-SQL보다 안정적입니다. 운영 로직과 권한 정책을 각 서비스가 계속 담당하고, AI 서비스는 질문을 해석해서 올바른 조회 API로 연결하는 역할만 합니다.
+
+Text-to-SQL 엔드포인트는 여전히 분석용 기능으로 남아 있지만, 관리자 챗봇의 주 흐름은 서비스 API 기반 Work Query입니다.
+
+### 4. 매뉴얼 질문은 Spring AI RAG로 처리합니다
+
+절차나 화면 경로를 묻는 질문은 RAG로 보냅니다. `RagChatService`는 `classpath:/knowledge/*.txt` 문서를 자동으로 읽고 PostgreSQL pgvector에 저장합니다. 서비스 시작 과정에서 같은 source가 있으면 기존 청크를 삭제하고 새 문서로 다시 반영합니다. 새 문서가 반영되면 같은 source와 전체 RAG 검색용 답변 캐시도 함께 비워서, 오래된 답변이 먼저 반환되지 않도록 했습니다.
+
+현재 주요 지식 문서는 다음과 같습니다.
+
+| 문서 | 역할 |
+|---|---|
+| `wms-ui-guide.txt` | 화면 경로, 메뉴, 관리자 UI 사용법 |
+| `wms-work-procedures.txt` | 입고, 출고, 피킹, 적치 등 업무 절차 |
+| `wms-status-definitions.txt` | 지시서와 작업 상태값 의미 |
+| `wms-exception-handling.txt` | 실패 원인과 예외 처리 |
+| `wms-electronics-storage-guide.txt` | 전자제품 보관/적치 가이드 |
+
+RAG는 "현재 DB에 무엇이 있나"보다 "어떻게 해야 하나", "왜 실패했나", "어느 화면에서 보나"에 강합니다. 따라서 출고 방법 질문을 재고 조회로 돌리지 않고, 절차 문서 기반으로 답변하는 것이 현재 기준입니다.
+
+### 5. 실패 사유를 오류 코드 지식으로 정리합니다
+
+RAG 문서에는 단순한 화면 사용법만 넣지 않았습니다. 관리자가 실제로 자주 만나는 지시서 생성 실패, 검수 완료 실패, 피킹 리스트 생성 실패, 파일 업로드 실패, 권한 오류, 재고 수량 불일치 같은 상황을 오류 코드 기준으로 정리했습니다.
+
+예를 들어 지시서 생성 조건이 부족하면 `DOC-400`, 이미 처리된 문서에 다시 요청하면 `DOC-409`, 입고 검수 완료 조건이 맞지 않으면 `INB-409`, 출고 지시서 생성 조건이 맞지 않으면 `OUT-409`, 피킹 리스트 생성 조건이 맞지 않으면 `PICK-409`로 분류합니다.
+
+이렇게 오류 코드를 문서화해두면 관리자가 "출고 지시서 생성이 왜 실패해?", "같은 지시서를 다시 만들면 왜 안 돼?", "피킹 리스트 생성 실패 원인 알려줘"처럼 질문했을 때 챗봇이 단순히 실패라고 말하지 않고, 가능한 원인과 확인해야 할 화면을 함께 안내할 수 있습니다.
+
+이 설계의 목적은 에러 코드를 사용자에게 그대로 외우게 만드는 것이 아닙니다. 운영자가 같은 실패를 반복해서 겪을 때 원인을 빠르게 좁히고, 어떤 상태값과 기준 정보를 먼저 확인해야 하는지 챗봇이 설명하게 만드는 것입니다.
+
+### 6. RAG 답변은 PostgreSQL 기반 캐시로 재사용합니다
+
+RAG 답변은 Redis가 아니라 PostgreSQL과 pgvector를 이용해 캐시합니다. `RagResponseCacheService`는 질문을 임베딩으로 변환한 뒤 `rag_response_cache` 테이블에서 비슷한 질문을 먼저 찾습니다.
+
+캐시 조회 기준은 cosine similarity입니다. 질문 임베딩과 저장된 질문 임베딩의 유사도가 `0.93` 이상이면 문서 검색과 답변 생성을 건너뛰고, 이전에 생성한 답변을 바로 반환합니다.
+
+```text
+사용자 질문
+  -> 검색용 질문 재작성
+  -> 카테고리 결정
+  -> rag_response_cache 유사 질문 조회
+  -> 캐시 hit이면 저장된 답변 반환
+  -> 캐시 miss이면 RAG 검색과 답변 생성
+  -> 정상 답변이면 캐시에 저장
+```
+
+캐시 테이블은 다음 정보를 저장합니다.
+
+| 컬럼 | 역할 |
+|---|---|
+| `question` | 검색용으로 정리된 질문 |
+| `answer` | 생성된 최종 답변 |
+| `source` | RAG 카테고리 |
+| `embedding` | 질문 임베딩 벡터 |
+| `last_used_at` | 마지막 사용 시각 |
+| `hit_count` | 재사용 횟수 |
+
+캐시에 넣지 않는 답변도 있습니다. 문서 근거가 부족해서 나온 fallback 답변이나 "요청하신 질문을 처리할 수 없습니다" 같은 실패성 응답은 저장하지 않습니다. 잘못된 답변이 반복 재사용되는 것을 막기 위한 기준입니다.
+
+knowledge 문서가 다시 반영될 때는 `DocumentIngestService`가 같은 source의 `vector_store` 청크를 새로 저장한 뒤 `rag_response_cache`에서도 같은 source와 전체 RAG 검색용 답변을 삭제합니다. 이 흐름이 정상적으로 끝나면 `AI_RAG_CACHE_EVICT` 로그에서 삭제된 캐시 건수를 확인할 수 있습니다.
+
+### 7. 답변 생성은 조회 결과를 근거로 제한합니다
+
+업무 API 조회 결과가 있으면 LLM은 그 결과만 근거로 자연어 답변을 작성합니다. 내부 컬럼명, SQL, UUID 같은 구현 정보는 관리자에게 노출하지 않고, 업무 용어로 바꿔 말합니다.
+
+예를 들어 재고 위치 질문은 단순히 위치만 말하지 않고 가용 수량도 함께 말합니다.
+
+```text
+무선 마우스는 서울중앙창고의 전자제품 구역에 있으며, 현재 가용 수량은 320개입니다.
+```
+
+처리할 작업이 없을 때도 실패처럼 말하지 않습니다.
+
+```text
+오늘은 처리할 작업이 존재하지 않습니다.
+```
+
+이 기준은 `docs/AI_CHATBOT_WORKFLOW.md`에 더 자세히 정리되어 있습니다. 챗봇 답변 품질을 수정할 때는 이 문서를 함께 확인해야 합니다.
+
+## 시스템 구성 : 관리자 웹, Gateway, AI 서비스, 도메인 서비스
+
+---
+
+현재 WMS는 프론트엔드와 백엔드가 분리되어 있습니다. 관리자 웹은 `be23-fin-3team-WBS-devops-fe`, 백엔드는 `be23-fin-3team-WBS-devops-be`에서 관리합니다.
+
+백엔드는 Spring Cloud 기반의 여러 서비스로 구성됩니다.
+
+| 서비스 | 역할 |
+|---|---|
+| eureka | 서비스 디스커버리 |
+| apigateway | 프론트 요청 진입점, 인증 필터, 서비스 라우팅 |
+| account | 관리자, 권한, 고객사 |
+| master | 창고, 상품, 구역, 랙, 로케이션, 공급사 |
+| stock | 입고, 출고, 재고, 지시서 |
+| ai-service | 챗봇 라우팅, RAG, Work Query, AI 답변 생성 |
+
+관리자 웹의 챗봇은 Gateway를 통해 `/ai-service/chat/ask`로 질문을 보냅니다. AI 서비스는 필요에 따라 stock, master, account 서비스를 조회하고, RAG 질문은 pgvector에 저장된 문서 지식과 OpenAI를 함께 사용해 답변합니다.
+
+## 로컬 구성 : 현재 구조 기준
+
+---
+
+로컬에서 전체 흐름을 확인하려면 Eureka, Gateway, 도메인 서비스, AI 서비스, 프론트엔드를 함께 준비합니다.
+
+### 1. 인프라 컨테이너 준비
+
 ```bash
 docker compose up -d ai-postgres
-# 필요 시: kafka, elasticsearch, kibana 등도
-docker compose up -d
 ```
 
-### 2. MySQL readonly 계정 (최초 1회) — Text-to-SQL 전용
-```bash
-mysql -uroot -ptest1234 <<'EOF'
-CREATE USER IF NOT EXISTS 'ai_readonly'@'localhost' IDENTIFIED BY 'readonly_pass';
-GRANT SELECT ON stock_db.*  TO 'ai_readonly'@'localhost';
-GRANT SELECT ON master_db.* TO 'ai_readonly'@'localhost';
-FLUSH PRIVILEGES;
-EOF
-```
+RAG는 PostgreSQL pgvector를 사용합니다. `ai-service/src/main/resources/db/init.sql`에서 vector extension과 기본 스키마를 준비합니다.
 
-### 3. Ollama 모델 pull (최초 1회, ~11GB)
-```bash
-brew services start ollama       # 백그라운드 기동 + 로그인 시 자동 시작
-ollama pull bge-m3               # 임베딩 (1.2GB)
-ollama pull gemma4:e4b           # 챗 생성 모델 (9.6GB)
-# (선택) ollama pull gemma4:26b  # 발표용 고성능 (17GB)
-```
+### 2. 공통 모듈 설치
 
-### 4. common 라이브러리 Maven Local 배포 (최초 1회)
 ```bash
 ./install-common.sh
 ```
 
-### 5. 서비스 기동 순서 (각 IDE 에서 실행 버튼 또는 CLI)
+### 3. 백엔드 서비스 시작
+
 ```bash
-# 반드시 Eureka → Gateway → 나머지 순서
-(cd eureka     && ./gradlew bootRun)   # :8761
-(cd apigateway && ./gradlew bootRun)   # :8080
-(cd account    && ./gradlew bootRun)   # random
-(cd master     && ./gradlew bootRun)
-(cd stock      && ./gradlew bootRun)
+(cd eureka && ./gradlew bootRun)
+(cd apigateway && ./gradlew bootRun)
+(cd account && ./gradlew bootRun)
+(cd master && ./gradlew bootRun)
+(cd stock && ./gradlew bootRun)
 (cd ai-service && ./gradlew bootRun)
 ```
 
-**확인**: http://localhost:8761 대시보드에서 **AI-SERVICE / ACCOUNT-SERVICE / MASTER-SERVICE / STOCK-SERVICE / API-GATEWAY** 5개가 UP 이면 성공.
+로컬 기본 포트는 다음과 같습니다.
+
+| 서비스 | 포트 |
+|---|---|
+| eureka | 8761 |
+| apigateway | 8080 |
+| ai-service | 8085 |
+| ai-postgres | 5433 |
+
+Eureka 대시보드에서 Gateway, account, master, stock, ai-service가 모두 UP이면 백엔드 서비스가 준비된 상태입니다.
+
+### 4. OpenAI와 RAG 설정
+
+AI 서비스는 OpenAI Chat API와 Embedding API를 사용합니다. 운영 환경에서는 환경변수로 주입합니다.
+
+| 환경변수 | 용도 | 기본값 |
+|---|---|---|
+| `OPENAI_API_KEY` | OpenAI API Key | 필수 |
+| `OPENAI_CHAT_MODEL` | 라우팅/답변 생성 모델 | `gpt-4o-mini` |
+| `OPENAI_EMBED_MODEL` | RAG 임베딩 모델 | `text-embedding-3-small` |
+| `RAG_AUTO_INGEST_ENABLED` | knowledge 문서 자동 반영 | `true` |
+| `RAG_AUTO_INGEST_LOCATION` | knowledge 문서 위치 | `classpath:/knowledge/*.txt` |
+| `RAG_SEARCH_TOP_K` | RAG 검색 문서 수 | `8` |
+| `RAG_SEARCH_SIMILARITY_THRESHOLD` | 문서 검색 최소 유사도 | `0.35` |
+| `RAG_MIN_ANSWER_SIMILARITY` | 답변 생성에 필요한 최소 근거 유사도 | `0.40` |
+
+시크릿은 문서나 커밋에 남기지 않습니다. 로컬 설정 파일에 키가 들어간 경우에도 공유 전 반드시 환경변수 방식으로 치환하고 키를 교체해야 합니다.
+
+### 5. 챗봇 API 확인
+
+```bash
+curl -X POST http://localhost:8080/ai-service/chat/ask \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "마우스 재고 어디 있어?",
+    "history": []
+  }'
+```
+
+업무 데이터 질문은 `WORK_QUERY`, 절차 질문은 `RAG`, 범위 밖 질문은 `UNSUPPORTED`로 처리되는지 로그를 확인합니다.
+
+주요 로그 키워드는 다음과 같습니다.
+
+| 로그 | 의미 |
+|---|---|
+| `AI_CHAT_ROUTE` | 챗봇 최상위 라우팅 결과 |
+| `AI_WORK_QUERY_START` | 업무 데이터 조회 시작 |
+| `AI_WORK_QUERY_API` | 도메인 서비스 API 조회 결과 |
+| `AI_WORK_QUERY_END` | 답변 생성 완료 |
+| `AI_RAG_CONTEXT` | RAG 검색 컨텍스트 |
+
+## 트러블슈팅 : RAG 답변이 최신 문서와 다르게 나올 때
 
 ---
 
-## 🤖 AI 기능 호출 예시
+RAG 답변이 최신 문서와 다르거나 엉뚱한 근거로 나온다면 한 가지 원인만 보면 안 됩니다. 현재 구조는 질문 재작성, 카테고리 결정, 답변 캐시, 문서 검색, 유사도 판단, 답변 생성을 순서대로 거치기 때문에 어느 단계에서 어긋났는지 로그로 분리해서 확인해야 합니다.
 
-### 1) RAG 운영 가이드 (문서 기반 QA)
+가장 먼저 볼 것은 캐시입니다. 로그에 `AI_RAG_CACHE_HIT`가 보이면 문서 검색과 답변 생성을 건너뛰고 `rag_response_cache`의 기존 답변을 반환한 것입니다. knowledge 문서가 정상 반영되면 같은 source의 캐시는 자동으로 비워집니다. 그래도 이전 답변이 보인다면 문서 반영이 정상 완료되지 않았거나, 다른 source 또는 전체 `RAG` source에 남은 캐시가 먼저 잡혔을 가능성을 확인합니다.
 
-```bash
-# 문서 인덱싱 (샘플 SOP 사용)
-curl -X POST http://localhost:8080/ai-service/rag/ingest \
-  -H "Content-Type: application/json" \
-  -d "$(python3 -c "
-import json
-c = open('ai-service/src/main/resources/samples/wms-sop-sample.md').read()
-print(json.dumps({
-    'content': c,
-    'metadata': {'source':'wms-sop-sample.md','category':'SOP','language':'ko'}
-}, ensure_ascii=False))
-")"
+확인 순서는 다음과 같습니다.
 
-# 질의 (SSE 스트리밍)
-curl -N -G "http://localhost:8080/ai-service/rag/chat/stream" \
-  --data-urlencode "q=지게차 운행 시 주의사항이 뭐야?"
-# → "지게차는 인증 자격자만 조작... (출처: ... > 4.1 지게차 운행)"
+| 확인 항목 | 관련 로그/값 | 판단 기준 |
+|---|---|
+| 캐시 hit 여부 | `AI_RAG_CACHE_HIT` | 기존 답변이 반환된 상태 |
+| 캐시 무효화 여부 | `AI_RAG_CACHE_EVICT` | 문서 source 기준으로 답변 캐시가 정리된 상태 |
+| 카테고리 결정 | `AI_RAG_START category` | 질문이 의도한 knowledge 문서로 분류됐는지 확인 |
+| 문서 검색 여부 | `AI_RAG_RETRIEVE` | 실제 pgvector 검색이 수행됐는지 확인 |
+| 검색 근거 | `AI_RAG_HIT source`, `section` | 어떤 문서 조각을 근거로 삼았는지 확인 |
+| 근거 유사도 | `score`, `RAG_MIN_ANSWER_SIMILARITY` | 문서가 있어도 기준보다 낮으면 답변 생성으로 가지 않음 |
+| 답변 생성 | `AI_RAG_LLM_END` | LLM 답변 생성까지 도달했는지 확인 |
 
-# 카테고리 필터
-curl -N -G "http://localhost:8080/ai-service/rag/chat/stream" \
-  --data-urlencode "q=PDA 꺼지면 어떻게 해?" \
-  --data-urlencode "category=FAQ"
-```
-
-### 2) 지능형 재고 분석 (Text-to-SQL)
-
-```bash
-curl -X POST http://localhost:8080/ai-service/sql/analyze \
-  -H "Content-Type: application/json" \
-  -d '{"question": "창고별 재고 총합(total_qty) 내림차순 상위 5개"}'
-
-# 응답 예시
-# {
-#   "question": "창고별 재고 총합...",
-#   "generatedSql": "SELECT warehouse_id, SUM(total_qty) ... LIMIT 5",
-#   "rows": [...],
-#   "executionTimeMs": 23
-# }
-```
-
-**보안 3중 방어**:
-1. MySQL 레벨: `ai_readonly` 계정이 SELECT 권한만 보유
-2. Connection 레벨: HikariCP `read-only: true`
-3. SQL 검증: 키워드 차단 (`INSERT/UPDATE/DELETE/DROP/...`) + 허용 테이블 화이트리스트 + `LIMIT 100` 강제
-
-### 3) 작업자 자동 배정
-
-```bash
-curl -X POST http://localhost:8080/ai-service/assign \
-  -H "Content-Type: application/json" \
-  -d '{"targetZoneCode": "A", "taskType": "PICKING"}'
-
-# 응답 예시
-# {
-#   "recommended": {"userId": "...", "lastZoneCode": "A", "activeTaskCount": 0},
-#   "score": 1.000,
-#   "reasoning": "같은 Zone A 에 마지막 위치 · 현재 진행 작업 0건 (점수 1.00)",
-#   "candidates": [...]  // 전체 점수 분해 (투명성)
-# }
-```
-
-**스코어 공식**: `0.7 × proximity + 0.3 × load`
-- proximity: 같은 zone = 1.0, 다른 zone = 0.3
-- load: `1 - min(activeTaskCount / 5.0, 1.0)`
-
----
-
-## 🧪 트러블슈팅 노트 (실제로 겪은 함정)
-
-### pgvector 카테고리 필터가 0 결과 반환
-Spring AI 1.0 `PgVectorStore` 는 기본 `metadata` 컬럼을 **`json`** 으로 만드는데, 필터는 `jsonb` 연산자(`@@`, `@>`) 를 사용함 → 타입 불일치로 결과 없음.
+문서를 고친 뒤 같은 답변이 계속 나오고 `AI_RAG_CACHE_EVICT` 로그가 없다면 먼저 자동 반영 로그를 확인합니다. 자동 반영은 됐지만 `AI_RAG_CACHE_HIT`가 계속 보이면 해당 source의 캐시를 수동으로 정리할 수 있습니다.
 
 ```sql
-ALTER TABLE vector_store ALTER COLUMN metadata TYPE jsonb USING metadata::jsonb;
-```
-JDBC 연결 풀이 컬럼 타입을 **캐시**하므로 **ai-service 재기동 필수**.
-
-### WebFlux 에서 Feign 주입이 `HttpMessageConverters` 로 실패
-WebFlux 만 있는 프로젝트에서는 Spring Boot 가 해당 빈을 자동 생성하지 않음. Feign 이 요구해서 부팅 실패.
-→ `ai-service/config/FeignMessageConvertersConfig.java` 로 수동 등록 (Jackson + String + ByteArray 3개 최소 세트).
-
-### Gateway `StripPrefix` 가 JWT 필터보다 먼저 실행
-`/ai-service/**` 를 공개 경로로 뚫으려 했지만, 필터 도달 시점엔 이미 `/ai-service` 가 제거된 상태였음 (`/ping` 만 보임).
-→ `JwtAuthFilter` 에 `@Order(Ordered.HIGHEST_PRECEDENCE)` 로 최우선 실행하게 변경.
-
-### common 라이브러리가 Tomcat 을 물고 와서 WebFlux 와 충돌
-common 이 `spring-boot-starter-web` 을 가져오면서 ai-service 가 Netty 대신 Tomcat 으로 뜸 → SSE 가 깨짐.
-→ ai-service `build.gradle` 에서 해당 의존성 exclude:
-```gradle
-implementation('com.beyond:common:0.0.1-SNAPSHOT') {
-    exclude group: 'org.springframework.boot', module: 'spring-boot-starter-web'
-}
+DELETE FROM rag_response_cache
+WHERE source = 'wms-ui-guide';
 ```
 
-### common 의 RedisConfig 가 `${spring.redis.host}` 요구
-ai-service 는 Redis 를 안 쓰지만 common 이 `RedisConfig` 를 물고 와서 부팅 실패.
-→ `application.yml` 에 더미 `spring.redis.host/port` 추가 (실제로는 접속 시도 안 함).
+특정 질문만 정리하고 싶다면 질문 일부로 좁힐 수 있습니다.
 
-### 두 번째 DataSource 가 PgVectorStore 에 잘못 주입됨
-MySQL readonly 를 `@Bean` 으로 추가했더니 Spring Boot 자동설정의 `PgVectorStore` 가 이걸 primary 로 잘못 주입받아 `CREATE EXTENSION vector` 시도 → read-only 거부.
-→ `@Bean(name = "readonlyDataSource", defaultCandidate = false)` 로 **autowire 후보에서 제외**, 명시적 `@Qualifier` 요청 시만 주입.
+```sql
+DELETE FROM rag_response_cache
+WHERE question LIKE '%출고 지시서%';
+```
 
-### HikariDataSource 바인딩 시 `jdbcUrl` vs `url`
-`@ConfigurationProperties` 가 `HikariDataSource` 에 직접 바인딩될 때는 **`jdbc-url`** 이어야 함 (Hikari 의 setter 이름). 일반 `DataSource` 빌더는 `url` 로 충분.
+캐시 hit가 아닌데 답변이 어긋난다면 카테고리 라우팅을 봅니다. 예를 들어 "불량 증빙 사진 어디서 봐?"는 `wms-ui-guide`로 가는 것이 자연스럽고, "승인 완료가 무슨 뜻이야?"는 `wms-status-definitions`로 가는 것이 자연스럽습니다. 카테고리가 다르면 검색 대상 문서가 달라지기 때문에 답변도 엉뚱해질 수 있습니다.
+
+카테고리가 맞는데도 답변이 나오지 않으면 유사도 기준을 확인합니다. `AI_RAG_HIT` 로그의 score가 `RAG_MIN_ANSWER_SIMILARITY`보다 낮으면 챗봇은 근거가 부족하다고 보고 fallback 답변을 반환할 수 있습니다.
+
+정리하면, RAG 문제는 `rag_response_cache`, 카테고리 라우팅, `vector_store` 검색 결과, 유사도 기준, 답변 생성 단계를 분리해서 보면 원인을 빠르게 좁힐 수 있습니다.
+
+## 운영 기준 : 빠른 답변보다 일관된 역할이 중요합니다
 
 ---
 
-## 📁 모듈 구조 (Phase 1~6 기준)
+WMS 챗봇은 일반 대화형 챗봇이 아닙니다. 답변이 조금 짧더라도 업무 범위를 지키고, 실제 데이터와 문서 근거에 맞는 답변을 하는 것이 더 중요합니다.
 
-```
-be23-fin-3team-WBS-be/
-├── eureka/                 # 서비스 디스커버리 (:8761)
-├── apigateway/             # API Gateway (:8080) — JwtAuthFilter, 라우트
-├── common/                 # 공통 라이브러리 (Maven Local 배포)
-├── account/                # 유저·권한·JWT 발급
-├── master/                 # 창고·구역·랙·상품 기준정보
-├── stock/                  # 입고·출고·재고·작업자 위치
-│   └── assignment/             # [Phase 6] 작업자 위치 엔티티·API
-├── ai-service/             # [Phase 1~6 신규] AI 기능 전용
-│   ├── rag/                    # Phase 4 : RAG 챗봇
-│   ├── sql/                    # Phase 5 : Text-to-SQL
-│   ├── assignment/             # Phase 6 : 자동 배정 (규칙 기반)
-│   └── config/                 # ReadonlyDataSource, FeignMessageConverters 등
-└── docker-compose.yml      # ai-postgres, kafka, es, kibana
-```
+현재 운영 기준은 다음과 같습니다.
+
+| 기준 | 설명 |
+|---|---|
+| 업무 범위 우선 | WMS 업무, 매뉴얼, 상태, 화면 경로 중심으로 답변 |
+| 민감정보 선차단 | 차단 질문은 API/RAG/답변 생성 LLM으로 넘기지 않음 |
+| 서비스 API 우선 | 관리자 챗봇의 업무 조회는 Text-to-SQL보다 도메인 API를 우선 |
+| 문서 자동 반영 | knowledge 문서는 배포 시 자동 ingest 후 같은 source와 전체 RAG 답변 캐시까지 무효화 |
+| 오류 코드 지식화 | 반복 실패 사유는 RAG 문서에서 코드와 조치 기준으로 관리 |
+| RAG 답변 캐시 | 유사도 높은 반복 질문은 PostgreSQL pgvector 캐시로 재사용 |
+| 내부 구현 비노출 | SQL, UUID, intent, slots 같은 내부 정보는 관리자 답변에 노출하지 않음 |
+| fallback 구분 | LLM 실패와 빈 조회 결과를 같은 실패처럼 표현하지 않음 |
+
+## 마치며 : WMS AI는 업무 시스템 위에서 동작해야 합니다
 
 ---
 
-## 📊 AI 기능 요약 표 (발표용)
+이번 구조의 핵심은 LLM을 모든 것을 처리하는 만능 서버로 두지 않는 것입니다. LLM은 사용자의 질문을 이해하고 구조화하는 데 강하고, Spring Boot와 도메인 서비스는 권한, 상태, 업무 규칙, 데이터 조회를 안정적으로 다루는 데 강합니다.
 
-| 기능 | 목적 | 기술 스택 | 차별화 포인트 |
-|---|---|---|---|
-| **RAG 챗봇** | SOP·매뉴얼 자연어 조회 | pgvector HNSW + bge-m3 + gemma4 + Spring AI `QuestionAnswerAdvisor` | 섹션 인식 청킹 + 출처 인용 + 카테고리 필터 + 환각 차단 |
-| **Text-to-SQL** | 실시간 재고 분석 | Gemma4 + MySQL readonly + JdbcTemplate | 3중 보안 (DB권한·연결·검증), 생성 SQL 투명 공개 |
-| **작업자 자동 배정** | 근접·부하 고려 추천 | 규칙 기반 가중합 + Feign 서비스 간 호출 | 점수 분해 공개 (투명성), LLM 배제로 고속 응답 |
+따라서 현재 WMS AI 챗봇은 LLM과 Spring Boot 중 하나를 선택하는 구조가 아니라, 두 역할을 분리해서 함께 사용하는 구조입니다.
 
----
+앞으로 더 발전시킬 수 있는 방향은 명확합니다. 지시서 흐름과 작업 이력 데이터를 더 촘촘히 연결하고, 챗봇이 단순 조회를 넘어 "이 지시서가 왜 지연되는지", "다음에 어떤 화면을 확인해야 하는지"까지 설명할 수 있게 만드는 것입니다.
 
-## 🔐 보안 · 운영 메모
-
-- `application.yml` 은 `.gitignore` 에 등록되어 있음. 시크릿은 환경변수 또는 별도 secrets store 사용.
-- AWS 액세스 키 등 민감 정보는 **절대 커밋 금지**. 커밋됐다면 즉시 해당 키 폐기.
-- ai_readonly MySQL 계정: **SELECT 권한만**, Text-to-SQL 전용. 주기적으로 쿼리 로그 감시.
-- Gateway JwtAuthFilter 의 `PUBLIC_PREFIX = /ai-service` 는 **개발 단계 전용**. 운영 배포 전 JWT 토큰 기반 인증으로 전환할 것.
+WMS는 결국 현장 업무를 정확하고 빠르게 흐르게 만드는 시스템입니다. AI 챗봇도 그 흐름을 방해하지 않고, 관리자가 더 빨리 판단할 수 있도록 돕는 방향으로 계속 개선합니다.
