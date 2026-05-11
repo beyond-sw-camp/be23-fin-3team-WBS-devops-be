@@ -44,7 +44,8 @@ public class PickingAssignmentService {
 
         Candidate selected = candidates.stream()
                 .min(Comparator
-                        .comparingInt((Candidate c) -> score(c, target, 0))
+                        .comparingInt((Candidate c) -> proximityPenalty(c, target))
+                        .thenComparingInt(c -> c.activeTasks() + 0)
                         .thenComparing(Candidate::rolePriority)
                         .thenComparing(Candidate::name, Comparator.nullsLast(String::compareTo))
                         .thenComparing(c -> c.userId().toString()))
@@ -72,7 +73,8 @@ public class PickingAssignmentService {
             TargetLocation target = resolveTargetLocation(clientId, warehouseId, List.of(productId));
             Candidate selected = candidates.stream()
                     .min(Comparator
-                            .comparingInt((Candidate c) -> score(c, target, planned.getOrDefault(c.userId(), 0)))
+                            .comparingInt((Candidate c) -> proximityPenalty(c, target))
+                            .thenComparingInt(c -> c.activeTasks() + planned.getOrDefault(c.userId(), 0))
                             .thenComparing(Candidate::rolePriority)
                             .thenComparing(Candidate::name, Comparator.nullsLast(String::compareTo))
                             .thenComparing(c -> c.userId().toString()))
@@ -163,8 +165,9 @@ public class PickingAssignmentService {
     }
 
     private int score(Candidate candidate, TargetLocation target, int plannedTasks) {
-        return (candidate.activeTasks() + plannedTasks) * 100
-                + proximityPenalty(candidate, target)
+        return proximityPenalty(candidate, target) * 100
+                + candidate.activeTasks()
+                + plannedTasks
                 + candidate.rolePriority();
     }
 

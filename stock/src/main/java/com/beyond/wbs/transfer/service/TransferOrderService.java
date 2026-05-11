@@ -30,6 +30,7 @@ import com.beyond.wbs.document.instruction.event.InstructionIssueRequested;
 import com.beyond.wbs.kafka.event.TransferStockEvent;
 import com.beyond.wbs.transfer.kafka.TransferEventPublisher;
 import com.beyond.wbs.websocket.WorkEventMessage;
+import com.beyond.wbs.websocket.WorkerAssignmentRefreshPublisher;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
@@ -67,6 +68,7 @@ public class TransferOrderService {
     private final ApplicationEventPublisher applicationEventPublisher;
     private final WorkAssignmentService workAssignmentService;
     private final TransferEventPublisher transferEventPublisher;
+    private final WorkerAssignmentRefreshPublisher workerAssignmentRefreshPublisher;
 
     public TransferOrderService(TransferOrderRepository transferOrderRepository,
                                  TransferOrderItemRepository transferOrderItemRepository,
@@ -78,7 +80,8 @@ public class TransferOrderService {
                                  WebSocketPublisher webSocketPublisher,
                                  ApplicationEventPublisher applicationEventPublisher,
                                  WorkAssignmentService workAssignmentService,
-                                 TransferEventPublisher transferEventPublisher) {
+                                 TransferEventPublisher transferEventPublisher,
+                                 WorkerAssignmentRefreshPublisher workerAssignmentRefreshPublisher) {
         this.transferOrderRepository = transferOrderRepository;
         this.transferOrderItemRepository = transferOrderItemRepository;
         this.transferExecutionRepository = transferExecutionRepository;
@@ -90,6 +93,7 @@ public class TransferOrderService {
         this.applicationEventPublisher = applicationEventPublisher;
         this.workAssignmentService = workAssignmentService;
         this.transferEventPublisher = transferEventPublisher;
+        this.workerAssignmentRefreshPublisher = workerAssignmentRefreshPublisher;
     }
 
     /** 창고 이름 조회 실패 시 null 반환 (전체 응답은 살려둠). */
@@ -314,7 +318,8 @@ public class TransferOrderService {
         if (order.getStatus() != TransferOrderStatus.draft) {
             throw new IllegalStateException("임시저장(draft) 상태의 지시서만 승인할 수 있습니다. 현재: " + order.getStatus());
         }
-        UUID assignedTo = workAssignmentService.assign(WorkTaskType.TRANSFER, clientId, approverId);
+        UUID assignedTo = workAssignmentService.assign(
+                WorkTaskType.TRANSFER, clientId, approverId, order.getFromWarehouseId(), null);
         order.approve(approverId, assignedTo);
 
         // 이동지시서 PDF 발행 요청
@@ -338,6 +343,7 @@ public class TransferOrderService {
                 .build();
         webSocketPublisher.send("/topic/admin/transfer/" + clientId, approvedMsg);
         webSocketPublisher.send("/topic/admin/transfer/" + clientId + "/" + order.getId(), approvedMsg);
+        workerAssignmentRefreshPublisher.publishRefresh("transfer", clientId, assignedTo, order.getId(), order.getOrderNo());
 
         // 통계/대시보드 카운트용 — 승인 이벤트 발행
         transferEventPublisher.publishApproved(TransferStockEvent.builder()
@@ -550,6 +556,7 @@ public class TransferOrderService {
         }
 
         item.pick(qty);
+        workAssignmentService.recordLastLocation(clientId, userId, order.getFromWarehouseId(), item.getFromLocationId());
 
         inventoryService.transferPickFromSource(
                 clientId, item.getProductId(),
@@ -602,6 +609,7 @@ public class TransferOrderService {
         }
 
         item.place(goodQty, defectQty);
+        workAssignmentService.recordLastLocation(clientId, userId, order.getToWarehouseId(), item.getToLocationId());
         saveExecution(order, item, goodQty, defectQty, userId);
 
         if (goodQty > 0) {

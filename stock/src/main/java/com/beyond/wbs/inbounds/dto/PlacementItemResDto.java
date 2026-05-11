@@ -18,6 +18,7 @@ public class PlacementItemResDto {
     private UUID placementOrderId;
     private UUID inboundOrderId;
     private UUID warehouseId;
+    private UUID assignedTo;
     private String orderNo;
     private String placementNo;
     private Integer seq;

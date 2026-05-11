@@ -5,6 +5,7 @@ import com.beyond.wbs.ai.chat.dto.ChatTurn;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.document.Document;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
@@ -22,6 +23,17 @@ public class RagChatService {
     private final OpenAiChatGateway openAiChatGateway;
     private final VectorStore vectorStore;
     private final RagResponseCacheService responseCacheService;
+
+    @Value("${wms.rag.search.top-k:8}")
+    private int searchTopK;
+
+    @Value("${wms.rag.search.similarity-threshold:0.35}")
+    private double searchSimilarityThreshold;
+
+    @Value("${wms.rag.search.min-answer-similarity:0.45}")
+    private double minAnswerSimilarity;
+
+    private static final String NO_EVIDENCE_ANSWER = "죄송합니다. 요청하신 질문을 처리할 수 없습니다.";
 
     private static final String SYSTEM_PROMPT = """
             Do NOT show your thinking or reasoning. Answer directly.
@@ -58,11 +70,13 @@ public class RagChatService {
             return answer.answer();
         }
 
-        SearchRequest searchRequest = buildSearchRequest(retrievalQuestion, effectiveCategory);
-        long searchStartedAt = System.nanoTime();
-        List<Document> documents = vectorStore.similaritySearch(searchRequest);
-        documents = retryWithoutCategoryIfEmpty(retrievalQuestion, effectiveCategory, documents);
-        logRetrieval(effectiveCategory, retrievalQuestion, documents, elapsedMs(searchStartedAt));
+        RetrievalResult retrievalResult = retrieveDocuments(retrievalQuestion, effectiveCategory);
+        List<Document> documents = retrievalResult.documents();
+        if (!hasEnoughEvidence(documents)) {
+            log.info("[AI_RAG_NO_EVIDENCE] category={}, reason={}, topK={}, minAnswerSimilarity={}, question='{}'",
+                    retrievalResult.category(), retrievalResult.reason(), documents.size(), minAnswerSimilarity, sanitize(retrievalQuestion));
+            return NO_EVIDENCE_ANSWER;
+        }
 
         long llmStartedAt = System.nanoTime();
         String answer = openAiChatGateway.complete(
@@ -81,13 +95,10 @@ public class RagChatService {
         long startedAt = System.nanoTime();
         String retrievalQuestion = rewriteQuestion(question, history == null ? List.of() : history);
         String effectiveCategory = resolveCategory(category, retrievalQuestion);
-        SearchRequest searchRequest = buildSearchRequest(retrievalQuestion, effectiveCategory);
-        long searchStartedAt = System.nanoTime();
-        List<Document> documents = vectorStore.similaritySearch(searchRequest);
-        documents = retryWithoutCategoryIfEmpty(retrievalQuestion, effectiveCategory, documents);
-        logRetrieval(effectiveCategory, retrievalQuestion, documents, elapsedMs(searchStartedAt));
+        RetrievalResult retrievalResult = retrieveDocuments(retrievalQuestion, effectiveCategory);
+        List<Document> documents = hasEnoughEvidence(retrievalResult.documents()) ? retrievalResult.documents() : List.of();
         log.info("[AI_RAG_CONTEXT] category={}, docs={}, totalMs={}, question='{}'",
-                effectiveCategory, documents.size(), elapsedMs(startedAt), sanitize(retrievalQuestion));
+                retrievalResult.category(), documents.size(), elapsedMs(startedAt), sanitize(retrievalQuestion));
         return formatContext(documents);
     }
 
@@ -111,11 +122,13 @@ public class RagChatService {
             return Flux.just(answer.answer());
         }
 
-        SearchRequest searchRequest = buildSearchRequest(retrievalQuestion, effectiveCategory);
-        long searchStartedAt = System.nanoTime();
-        List<Document> documents = vectorStore.similaritySearch(searchRequest);
-        documents = retryWithoutCategoryIfEmpty(retrievalQuestion, effectiveCategory, documents);
-        logRetrieval(effectiveCategory, retrievalQuestion, documents, elapsedMs(searchStartedAt));
+        RetrievalResult retrievalResult = retrieveDocuments(retrievalQuestion, effectiveCategory);
+        List<Document> documents = retrievalResult.documents();
+        if (!hasEnoughEvidence(documents)) {
+            log.info("[AI_RAG_NO_EVIDENCE] stream=true, category={}, reason={}, topK={}, minAnswerSimilarity={}, question='{}'",
+                    retrievalResult.category(), retrievalResult.reason(), documents.size(), minAnswerSimilarity, sanitize(retrievalQuestion));
+            return Flux.just(NO_EVIDENCE_ANSWER);
+        }
 
         String answer = openAiChatGateway.complete(
                 buildSystemPrompt(history),
@@ -182,8 +195,8 @@ public class RagChatService {
     private SearchRequest buildSearchRequest(String question, String category) {
         SearchRequest.Builder searchBuilder = SearchRequest.builder()
                 .query(question)
-                .topK(4)                    // 상위 4개 청크 검색
-                .similarityThreshold(0.3);  // bge-m3 한국어 기준, 너무 높으면 드롭됨
+                .topK(searchTopK)
+                .similarityThreshold(searchSimilarityThreshold);
 
         // category 파라미터가 있으면 metadata 필터링. RAG는 전체 검색을 의미한다.
         if (category != null && !category.isBlank() && !"RAG".equalsIgnoreCase(category)) {
@@ -248,21 +261,44 @@ public class RagChatService {
         return "RAG";
     }
 
-    private List<Document> retryWithoutCategoryIfEmpty(String question, String category, List<Document> documents) {
-        if (!documents.isEmpty() || category == null || category.isBlank() || "RAG".equalsIgnoreCase(category)) {
-            return documents;
+    private RetrievalResult retrieveDocuments(String question, String category) {
+        long searchStartedAt = System.nanoTime();
+        List<Document> documents = vectorStore.similaritySearch(buildSearchRequest(question, category));
+        logRetrieval(category, question, documents, elapsedMs(searchStartedAt));
+
+        if (isRagCategory(category) || hasEnoughEvidence(documents)) {
+            return new RetrievalResult(documents, normalizeCategory(category), "category_search");
         }
+
         try {
             long retryStartedAt = System.nanoTime();
             List<Document> fallbackDocuments = vectorStore.similaritySearch(buildSearchRequest(question, "RAG"));
-            log.info("[AI_RAG_RETRY] reason=empty_category_result, category={}, fallbackTopK={}, retryMs={}, question='{}'",
-                    category, fallbackDocuments.size(), elapsedMs(retryStartedAt), sanitize(question));
-            return fallbackDocuments;
+            String reason = documents.isEmpty() ? "empty_category_result" : "weak_category_result";
+            log.info("[AI_RAG_RETRY] reason={}, category={}, categoryTopK={}, fallbackTopK={}, retryMs={}, question='{}'",
+                    reason, category, documents.size(), fallbackDocuments.size(), elapsedMs(retryStartedAt), sanitize(question));
+            logRetrieval("RAG", question, fallbackDocuments, elapsedMs(retryStartedAt));
+            return new RetrievalResult(fallbackDocuments, "RAG", reason);
         } catch (Exception e) {
             log.warn("[AI_RAG_RETRY] failed category={}, reason={}, question='{}'",
                     category, e.getMessage(), sanitize(question));
-            return documents;
+            return new RetrievalResult(documents, normalizeCategory(category), "retry_failed");
         }
+    }
+
+    private boolean hasEnoughEvidence(List<Document> documents) {
+        if (documents == null || documents.isEmpty()) {
+            return false;
+        }
+        return documents.stream()
+                .map(Document::getScore)
+                .filter(score -> score != null)
+                .max(Double::compareTo)
+                .map(score -> score >= minAnswerSimilarity)
+                .orElse(true);
+    }
+
+    private boolean isRagCategory(String category) {
+        return category == null || category.isBlank() || "RAG".equalsIgnoreCase(category.trim());
     }
 
     private Optional<RagResponseCacheService.CachedAnswer> findSimilarQuietly(String question, String source) {
@@ -332,5 +368,8 @@ public class RagChatService {
 
     private long elapsedMs(long startedAt) {
         return (System.nanoTime() - startedAt) / 1_000_000;
+    }
+
+    private record RetrievalResult(List<Document> documents, String category, String reason) {
     }
 }

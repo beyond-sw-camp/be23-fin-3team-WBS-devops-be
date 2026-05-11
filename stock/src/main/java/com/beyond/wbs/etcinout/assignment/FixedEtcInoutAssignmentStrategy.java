@@ -17,7 +17,7 @@ public class FixedEtcInoutAssignmentStrategy implements EtcInoutAssignmentStrate
     private final WorkAssignmentService workAssignmentService;
 
     @Override
-    public UUID assign(UUID clientId, UUID requesterId) {
-        return workAssignmentService.assign(WorkTaskType.ETC_INOUT, clientId, requesterId);
+    public UUID assign(UUID clientId, UUID requesterId, UUID warehouseId, UUID locationId) {
+        return workAssignmentService.assign(WorkTaskType.ETC_INOUT, clientId, requesterId, warehouseId, locationId);
     }
 }

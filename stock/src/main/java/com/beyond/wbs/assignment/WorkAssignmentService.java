@@ -1,7 +1,11 @@
 package com.beyond.wbs.assignment;
 
 import com.beyond.wbs.common.client.AccountServiceClient;
+import com.beyond.wbs.common.client.MasterServiceClient;
 import com.beyond.wbs.common.client.dto.AccountUserListResDto;
+import com.beyond.wbs.common.client.dto.LocationResDto;
+import com.beyond.wbs.outbounds.assignment.WorkerLastLocation;
+import com.beyond.wbs.outbounds.assignment.WorkerLastLocationRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -10,7 +14,6 @@ import org.springframework.stereotype.Service;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.UUID;
 
 @Slf4j
@@ -21,55 +24,87 @@ public class WorkAssignmentService {
     private static final UUID FALLBACK_OPERATOR_ID =
             UUID.fromString("01935c00-0000-7200-8000-000000000001");
 
-    private static final Map<WorkTaskType, List<String>> LOGIN_PREFERENCES = Map.of(
-            WorkTaskType.INBOUND_INSPECTION, List.of("operator14", "operator8", "operator5", "operator12"),
-            WorkTaskType.PLACEMENT, List.of("operator4", "operator11", "operator2"),
-            WorkTaskType.PICKING, List.of("operator3", "operator10", "operator2"),
-            WorkTaskType.OUTBOUND_DISPATCH, List.of("operator6", "operator13", "operator2"),
-            WorkTaskType.STOCK_COUNT, List.of("operator9", "operator2", "operator14"),
-            WorkTaskType.TRANSFER, List.of("operator2", "operator9", "operator1"),
-            WorkTaskType.ETC_INOUT, List.of("operator1", "operator15", "operator2")
-    );
-
     private final AccountServiceClient accountServiceClient;
+    private final MasterServiceClient masterServiceClient;
+    private final WorkerLastLocationRepository workerLastLocationRepository;
     private final JdbcTemplate jdbcTemplate;
 
     public UUID assign(WorkTaskType taskType, UUID clientId, UUID requesterId) {
-        List<Candidate> candidates = loadCandidates(requesterId);
+        return assign(taskType, clientId, requesterId, null, null);
+    }
+
+    public UUID assign(WorkTaskType taskType, UUID clientId, UUID requesterId,
+                       UUID targetWarehouseId, UUID targetLocationId) {
+        List<Candidate> candidates = loadCandidates(clientId, requesterId);
         if (candidates.isEmpty()) {
             UUID fallback = requesterId != null ? requesterId : FALLBACK_OPERATOR_ID;
             log.warn("[WORK_AUTO_ASSIGN] no_candidate taskType={}, fallback={}", taskType, mask(fallback));
             return fallback;
         }
+        TargetLocation target = resolveTargetLocation(clientId, targetWarehouseId, targetLocationId);
 
         Candidate selected = candidates.stream()
                 .min(Comparator
-                        .comparingInt((Candidate c) -> preferenceRank(taskType, c.loginId()))
-                        .thenComparingInt(c -> activeWorkload(clientId, c.userId()))
+                        .comparingInt((Candidate c) -> proximityPenalty(c, target))
+                        .thenComparingInt(Candidate::activeWorkload)
                         .thenComparingInt(Candidate::rolePriority)
                         .thenComparing(Candidate::name, Comparator.nullsLast(String::compareTo))
                         .thenComparing(c -> c.userId().toString()))
                 .orElse(candidates.get(0));
 
-        log.info("[WORK_AUTO_ASSIGN] taskType={}, selected={}({}), loginId={}, workload={}, clientId={}, requesterId={}",
-                taskType, selected.name(), selected.roleCode(), selected.loginId(),
-                activeWorkload(clientId, selected.userId()), mask(clientId), mask(requesterId));
+        log.info("[WORK_AUTO_ASSIGN] taskType={}, selected={}({}), workload={}, targetWarehouse={}, targetLocation={}, lastWarehouse={}, lastLocation={}, clientId={}, requesterId={}",
+                taskType, selected.name(), selected.roleCode(), selected.activeWorkload(),
+                mask(target.warehouseId()), mask(target.locationId()), mask(selected.lastWarehouseId()),
+                mask(selected.lastLocationId()), mask(clientId), mask(requesterId));
         return selected.userId();
     }
 
-    private List<Candidate> loadCandidates(UUID requesterId) {
+    public void recordLastLocation(UUID clientId, UUID userId, UUID warehouseId, UUID locationId) {
+        if (clientId == null || userId == null || warehouseId == null) {
+            return;
+        }
+        LocationResDto location = fetchLocation(clientId, locationId);
+        WorkerLastLocation lastLocation = workerLastLocationRepository
+                .findByClientIdAndUserId(clientId, userId)
+                .orElseGet(() -> WorkerLastLocation.builder()
+                        .clientId(clientId)
+                        .userId(userId)
+                        .warehouseId(warehouseId)
+                        .build());
+        lastLocation.updateLocation(
+                warehouseId,
+                location == null ? null : location.getZoneId(),
+                location == null ? null : location.getZoneCode(),
+                location == null ? null : location.getZoneName(),
+                locationId,
+                location == null ? null : location.getCode()
+        );
+        workerLastLocationRepository.save(lastLocation);
+    }
+
+    private List<Candidate> loadCandidates(UUID clientId, UUID requesterId) {
         try {
             List<AccountUserListResDto> users = accountServiceClient.getUsers(
                     requesterId == null ? FALLBACK_OPERATOR_ID.toString() : requesterId.toString());
             return users.stream()
                     .filter(user -> user.getId() != null)
                     .filter(user -> isAssignableRole(user.getRoleCode()))
-                    .map(user -> new Candidate(
+                    .map(user -> {
+                        WorkerLastLocation lastLocation = clientId == null ? null : workerLastLocationRepository
+                                .findByClientIdAndUserId(clientId, user.getId())
+                                .orElse(null);
+                        return new Candidate(
                             user.getId(),
                             user.getName(),
                             user.getLoginId(),
                             user.getRoleCode(),
-                            rolePriority(user.getRoleCode())))
+                            rolePriority(user.getRoleCode()),
+                            activeWorkload(clientId, user.getId()),
+                            lastLocation == null ? null : lastLocation.getWarehouseId(),
+                            lastLocation == null ? null : lastLocation.getZoneId(),
+                            lastLocation == null ? null : lastLocation.getZoneCode(),
+                            lastLocation == null ? null : lastLocation.getLocationId());
+                    })
                     .toList();
         } catch (Exception e) {
             log.warn("[WORK_AUTO_ASSIGN] account users load failed: {}", e.getMessage());
@@ -77,11 +112,50 @@ public class WorkAssignmentService {
         }
     }
 
-    private int preferenceRank(WorkTaskType taskType, String loginId) {
-        List<String> preferences = LOGIN_PREFERENCES.getOrDefault(taskType, List.of());
-        String normalized = loginId == null ? "" : loginId.toLowerCase(Locale.ROOT);
-        int index = preferences.indexOf(normalized);
-        return index < 0 ? 100 : index;
+    private int proximityPenalty(Candidate candidate, TargetLocation target) {
+        if (target == null || target.warehouseId() == null) {
+            return 40;
+        }
+        if (target.locationId() != null && target.locationId().equals(candidate.lastLocationId())) {
+            return 0;
+        }
+        if (target.zoneId() != null && target.zoneId().equals(candidate.lastZoneId())) {
+            return 5;
+        }
+        if (target.zoneCode() != null && target.zoneCode().equals(candidate.lastZoneCode())) {
+            return 8;
+        }
+        if (target.warehouseId().equals(candidate.lastWarehouseId())) {
+            return 25;
+        }
+        return 50;
+    }
+
+    private TargetLocation resolveTargetLocation(UUID clientId, UUID warehouseId, UUID locationId) {
+        if (locationId == null) {
+            return new TargetLocation(warehouseId, null, null, null);
+        }
+        LocationResDto location = fetchLocation(clientId, locationId);
+        if (location == null) {
+            return new TargetLocation(warehouseId, null, null, locationId);
+        }
+        return new TargetLocation(
+                warehouseId,
+                location.getZoneId(),
+                location.getZoneCode(),
+                locationId);
+    }
+
+    private LocationResDto fetchLocation(UUID clientId, UUID locationId) {
+        if (clientId == null || locationId == null) {
+            return null;
+        }
+        try {
+            return masterServiceClient.getLocation(locationId, clientId.toString());
+        } catch (Exception e) {
+            log.warn("[WORK_AUTO_ASSIGN] location fetch failed locationId={}, err={}", mask(locationId), e.getMessage());
+            return null;
+        }
     }
 
     private int activeWorkload(UUID clientId, UUID userId) {
@@ -171,6 +245,18 @@ public class WorkAssignmentService {
             String name,
             String loginId,
             String roleCode,
-            int rolePriority) {
+            int rolePriority,
+            int activeWorkload,
+            UUID lastWarehouseId,
+            UUID lastZoneId,
+            String lastZoneCode,
+            UUID lastLocationId) {
+    }
+
+    private record TargetLocation(
+            UUID warehouseId,
+            UUID zoneId,
+            String zoneCode,
+            UUID locationId) {
     }
 }

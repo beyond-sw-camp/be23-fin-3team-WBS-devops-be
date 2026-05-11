@@ -1,6 +1,7 @@
 package com.beyond.wbs.etcinout.service;
 
 import com.beyond.wbs.code.NumberingUtil;
+import com.beyond.wbs.assignment.WorkAssignmentService;
 import com.beyond.wbs.common.client.AccountServiceClient;
 import com.beyond.wbs.common.client.MasterServiceClient;
 import com.beyond.wbs.common.client.dto.StoreResDto;
@@ -41,6 +42,7 @@ import com.beyond.wbs.etcinout.kafka.EtcInoutEventPublisher;
 import com.beyond.wbs.kafka.event.EtcInoutStockEvent;
 import com.beyond.wbs.websocket.WebSocketPublisher;
 import com.beyond.wbs.websocket.WorkEventMessage;
+import com.beyond.wbs.websocket.WorkerAssignmentRefreshPublisher;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -81,6 +83,8 @@ public class EtcInoutService {
     private final AccountServiceClient accountServiceClient;
     private final EtcInoutMailService etcInoutMailService;
     private final EtcInoutEventPublisher etcInoutEventPublisher;
+    private final WorkAssignmentService workAssignmentService;
+    private final WorkerAssignmentRefreshPublisher workerAssignmentRefreshPublisher;
 
     // ============================================================
     // Feign 조회 헬퍼 (실패 시 null — 이름 없어도 서비스는 동작)
@@ -143,7 +147,12 @@ public class EtcInoutService {
         webSocketPublisher.send("/topic/admin/etc-inout/" + clientId + "/" + order.getId(), msg);
 
         if (notifyWorker && order.getAssignedTo() != null) {
-            webSocketPublisher.send("/topic/worker/" + order.getAssignedTo() + "/etc-inout", msg);
+            workerAssignmentRefreshPublisher.publishRefresh(
+                    "etc-inout",
+                    clientId,
+                    order.getAssignedTo(),
+                    order.getId(),
+                    order.getOrderNo());
         }
     }
 
@@ -436,7 +445,12 @@ public class EtcInoutService {
             }
         }
 
-        UUID assignedWorker = etcInoutAssignmentStrategy.assign(clientId, userId);
+        UUID targetLocationId = itemRepository.findByEtcOrderId(id).stream()
+                .map(EtcInoutOrderItem::getLocationId)
+                .filter(java.util.Objects::nonNull)
+                .findFirst()
+                .orElse(null);
+        UUID assignedWorker = etcInoutAssignmentStrategy.assign(clientId, userId, order.getWarehouseId(), targetLocationId);
         order.approve(userId, assignedWorker);
 
         notifyEtcInout("APPROVED", order, userId, true);
@@ -706,6 +720,7 @@ public class EtcInoutService {
             // 실제 픽업한 수량만 재고 차감
             if (picked > 0) {
                 applyOutboundInventory(clientId, order, item, picked, userId);
+                workAssignmentService.recordLastLocation(clientId, userId, order.getWarehouseId(), item.getLocationId());
                 evtItems.add(EtcInoutStockEvent.Item.builder()
                         .productId(item.getProductId())
                         .locationId(item.getLocationId())
@@ -784,6 +799,10 @@ public class EtcInoutService {
 
             // 재고 반영 (정상/불량 분기)
             applyInventory(clientId, order, item, processed, defect, req.getDefectLocationId(), userId);
+            UUID workedLocationId = req.getLocationId() != null ? req.getLocationId() : item.getLocationId();
+            if (workedLocationId != null) {
+                workAssignmentService.recordLastLocation(clientId, userId, order.getWarehouseId(), workedLocationId);
+            }
 
             int total = processed + defect;
             if (total > 0) {
@@ -836,11 +855,16 @@ public class EtcInoutService {
             }
             item.recordWorkResult(processed, defect, dto.getLocationId(), dto.getDefectReason(), userId);
             applyInventory(clientId, order, item, processed, defect, dto.getDefectLocationId(), userId);
+            UUID workedLocationId = dto.getLocationId() != null ? dto.getLocationId() : item.getLocationId();
+            if (workedLocationId != null) {
+                workAssignmentService.recordLastLocation(clientId, userId, order.getWarehouseId(), workedLocationId);
+            }
         } else {
             int picked = dto.getPickedQty() != null ? dto.getPickedQty() : 0;
             item.recordPickResult(picked, userId);
             if (picked > 0) {
                 applyOutboundInventory(clientId, order, item, picked, userId);
+                workAssignmentService.recordLastLocation(clientId, userId, order.getWarehouseId(), item.getLocationId());
             }
         }
 
@@ -906,6 +930,9 @@ public class EtcInoutService {
             } else {
                 applyOutboundInventory(clientId, order, item, item.getQty(), userId);
                 item.recordPickResult(item.getQty(), userId);
+            }
+            if (item.getLocationId() != null) {
+                workAssignmentService.recordLastLocation(clientId, userId, order.getWarehouseId(), item.getLocationId());
             }
             if (item.getQty() > 0) {
                 evtItems.add(EtcInoutStockEvent.Item.builder()
