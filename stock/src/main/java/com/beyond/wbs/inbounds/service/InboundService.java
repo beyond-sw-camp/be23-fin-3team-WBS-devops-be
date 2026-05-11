@@ -901,6 +901,7 @@ public class InboundService {
             if (order.getSupplierId() != null) supplierIds.add(order.getSupplierId());
             if (order.getWarehouseId() != null) warehouseIds.add(order.getWarehouseId());
             if (order.getCreatedBy() != null) userIds.add(order.getCreatedBy());
+            if (order.getAssignedTo() != null) userIds.add(order.getAssignedTo());
             if ("return".equals(order.getOriginType()) && order.getOriginId() != null) {
                 outboundIds.add(order.getOriginId());
             }
@@ -922,8 +923,9 @@ public class InboundService {
             String warehouseName = warehouse != null && warehouse.getName() != null ? warehouse.getName() : "";
             String returnFrom = storeNameByOutboundId.get(order.getOriginId());
             String createdByName = userNameMap.get(order.getCreatedBy());
+            String assignedToName = userNameMap.get(order.getAssignedTo());
             return InboundOrderResDto.fromEntity(order, supplierName, warehouseName, createdByName,
-                    (int) summary[0], (int) summary[1], returnFrom);
+                    (int) summary[0], (int) summary[1], returnFrom, assignedToName);
         });
     }
 
@@ -980,6 +982,7 @@ public class InboundService {
         String supplierName = resolveSupplierName(order.getSupplierId(), clientId);
         String warehouseName = resolveWarehouseName(order.getWarehouseId(), clientId);
         String createdByName = resolveUserName(order.getCreatedBy(), requesterId);
+        String assignedToName = resolveUserName(order.getAssignedTo(), requesterId);
 
         // 반품 입고면 출고처명 + 원본 출고지시서 번호 조회
         String returnFrom = null;
@@ -1000,7 +1003,7 @@ public class InboundService {
         }
 
         InboundOrderResDto dto = InboundOrderResDto.fromEntity(order, supplierName, warehouseName, createdByName,
-                items.size(), totalQty, returnFrom);
+                items.size(), totalQty, returnFrom, assignedToName);
         dto.setOriginNo(originNo);
         return dto;
     }

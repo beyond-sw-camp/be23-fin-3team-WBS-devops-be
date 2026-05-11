@@ -420,6 +420,8 @@ public class OutboundService {
                     .scheduledDate(order.getScheduledDate())
                     .status(order.getStatus())
                     .totalQty(totalQty)
+                    .assignedTo(order.getAssignedTo())
+                    .assignedToName(null)
                     .createdAt(order.getCreatedAt())
                     .build();
         });
@@ -502,6 +504,7 @@ public class OutboundService {
         String storeName = fetchStoreName(order.getStoreId(), clientId);
         String createdByName = fetchUserName(order.getCreatedBy(), requesterId);
         String approvedByName = fetchUserName(order.getApprovedBy(), requesterId);
+        String assignedToName = fetchUserName(order.getAssignedTo(), requesterId);
 
         // 이 출고지시서에 연결된 피킹리스트 ID 조회 (중복 제거)
         List<UUID> pickingListIds = outboundPickinglistRepository.findByOutboundOrderId(order.getId())
@@ -535,6 +538,8 @@ public class OutboundService {
                 .storeName(storeName)
                 .createdByName(createdByName)
                 .approvedByName(approvedByName)
+                .assignedTo(order.getAssignedTo())
+                .assignedToName(assignedToName)
                 .scheduledDate(order.getScheduledDate())
                 .shippingAddress(order.getShippingAddress())
                 .status(order.getStatus())

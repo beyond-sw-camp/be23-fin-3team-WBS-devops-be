@@ -83,6 +83,19 @@ SLLM은 사용하지 않는다. OpenAI 기반의 분류 전용 프롬프트로 �
 - 사용자 역할명/권한 정책처럼 개인 연락처나 인증정보를 노출하지 않는 관리 정보
 - 개인정보 처리 방법이나 보안 정책에 대한 일반 설명
 
+## RAG 문서 반영 기준
+
+운영 배포 후 개발자가 Postman으로 문서를 수동 ingest하지 않는다.
+`ai-service`는 기동 시 `classpath:/knowledge/*.txt` 문서를 자동으로 읽고 pgvector에 upsert한다.
+
+- 기본 설정: `wms.rag.auto-ingest.enabled=true`
+- 기본 위치: `classpath:/knowledge/*.txt`
+- 각 파일명에서 확장자를 뺀 값을 `metadata.source`와 `metadata.category`로 사용한다.
+- 같은 `source`가 이미 있으면 기존 청크를 삭제한 뒤 새 청크를 저장한다.
+- 특정 환경에서 자동 반영을 끄려면 `RAG_AUTO_INGEST_ENABLED=false`로 설정한다.
+
+따라서 `wms-ui-guide.txt` 같은 지식 문서를 수정하고 ai-service를 배포하면, 서비스 시작 시 새 내용이 vector_store에 반영된다.
+
 ## 출고 방법 질문 답변 기준
 
 질문 예시: "유선 마우스 출고 어떻게 해?", "무선 마우스 출고 원해".

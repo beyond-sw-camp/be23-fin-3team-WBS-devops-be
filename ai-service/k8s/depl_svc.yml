@@ -36,6 +36,10 @@ spec:
           value: update
         - name: PGVECTOR_INITIALIZE_SCHEMA
           value: "true"
+        - name: RAG_AUTO_INGEST_ENABLED
+          value: "true"
+        - name: RAG_AUTO_INGEST_LOCATION
+          value: classpath:/knowledge/*.txt
         - name: OPENAI_API_KEY
           valueFrom:
             secretKeyRef:

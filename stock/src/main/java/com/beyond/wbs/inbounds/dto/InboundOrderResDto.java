@@ -36,6 +36,8 @@ public class InboundOrderResDto {
     private String createdByName;
     private UUID approvedBy;
     private String approvedAt;
+    private UUID assignedTo;
+    private String assignedToName;
     private String createdAt;
     private Integer totalItems;
     private Integer totalQty;
@@ -49,6 +51,13 @@ public class InboundOrderResDto {
     public static InboundOrderResDto fromEntity(InboundOrders order, String supplierName,
                                                  String warehouseName, String createdByName,
                                                  int totalItems, int totalQty, String returnFrom) {
+        return fromEntity(order, supplierName, warehouseName, createdByName, totalItems, totalQty, returnFrom, null);
+    }
+
+    public static InboundOrderResDto fromEntity(InboundOrders order, String supplierName,
+                                                 String warehouseName, String createdByName,
+                                                 int totalItems, int totalQty, String returnFrom,
+                                                 String assignedToName) {
         return InboundOrderResDto.builder()
                 .id(order.getId())
                 .orderNo(order.getOrderNo())
@@ -65,6 +74,8 @@ public class InboundOrderResDto {
                 .createdByName(createdByName)
                 .approvedBy(order.getApprovedBy())
                 .approvedAt(order.getApprovedAt() != null ? order.getApprovedAt().toString() : null)
+                .assignedTo(order.getAssignedTo())
+                .assignedToName(assignedToName)
                 .createdAt(order.getCreatedAt().toLocalDate().toString())
                 .totalItems(totalItems)
                 .totalQty(totalQty)
