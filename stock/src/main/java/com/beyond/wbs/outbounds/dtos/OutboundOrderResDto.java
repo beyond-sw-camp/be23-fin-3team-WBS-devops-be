@@ -33,6 +33,10 @@ public class OutboundOrderResDto {
     // 총 수량
     private Integer totalQty;
 
+    // 작업자 자동 배정 대상자
+    private UUID assignedTo;
+    private String assignedToName;
+
     // 생성일시
     private LocalDateTime createdAt;
 

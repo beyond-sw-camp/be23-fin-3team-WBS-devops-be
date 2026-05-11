@@ -61,6 +61,7 @@ public class RagChatService {
         SearchRequest searchRequest = buildSearchRequest(retrievalQuestion, effectiveCategory);
         long searchStartedAt = System.nanoTime();
         List<Document> documents = vectorStore.similaritySearch(searchRequest);
+        documents = retryWithoutCategoryIfEmpty(retrievalQuestion, effectiveCategory, documents);
         logRetrieval(effectiveCategory, retrievalQuestion, documents, elapsedMs(searchStartedAt));
 
         long llmStartedAt = System.nanoTime();
@@ -70,7 +71,9 @@ public class RagChatService {
         );
         log.info("[AI_RAG_LLM_END] answerChars={}, llmMs={}, totalMs={}, question='{}'",
                 answer == null ? 0 : answer.length(), elapsedMs(llmStartedAt), elapsedMs(startedAt), sanitize(retrievalQuestion));
-        saveCacheQuietly(retrievalQuestion, answer, cacheSource);
+        if (!documents.isEmpty()) {
+            saveCacheQuietly(retrievalQuestion, answer, cacheSource);
+        }
         return answer;
     }
 
@@ -81,6 +84,7 @@ public class RagChatService {
         SearchRequest searchRequest = buildSearchRequest(retrievalQuestion, effectiveCategory);
         long searchStartedAt = System.nanoTime();
         List<Document> documents = vectorStore.similaritySearch(searchRequest);
+        documents = retryWithoutCategoryIfEmpty(retrievalQuestion, effectiveCategory, documents);
         logRetrieval(effectiveCategory, retrievalQuestion, documents, elapsedMs(searchStartedAt));
         log.info("[AI_RAG_CONTEXT] category={}, docs={}, totalMs={}, question='{}'",
                 effectiveCategory, documents.size(), elapsedMs(startedAt), sanitize(retrievalQuestion));
@@ -110,6 +114,7 @@ public class RagChatService {
         SearchRequest searchRequest = buildSearchRequest(retrievalQuestion, effectiveCategory);
         long searchStartedAt = System.nanoTime();
         List<Document> documents = vectorStore.similaritySearch(searchRequest);
+        documents = retryWithoutCategoryIfEmpty(retrievalQuestion, effectiveCategory, documents);
         logRetrieval(effectiveCategory, retrievalQuestion, documents, elapsedMs(searchStartedAt));
 
         String answer = openAiChatGateway.complete(
@@ -118,7 +123,9 @@ public class RagChatService {
         );
         log.info("[AI_RAG_LLM_END] stream=true, answerChars={}, totalMs={}, question='{}'",
                 answer == null ? 0 : answer.length(), elapsedMs(startedAt), sanitize(retrievalQuestion));
-        saveCacheQuietly(retrievalQuestion, answer, cacheSource);
+        if (!documents.isEmpty()) {
+            saveCacheQuietly(retrievalQuestion, answer, cacheSource);
+        }
         return Flux.just(answer);
     }
 
@@ -178,8 +185,8 @@ public class RagChatService {
                 .topK(4)                    // 상위 4개 청크 검색
                 .similarityThreshold(0.3);  // bge-m3 한국어 기준, 너무 높으면 드롭됨
 
-        // category 파라미터가 있으면 metadata 필터링
-        if (category != null && !category.isBlank()) {
+        // category 파라미터가 있으면 metadata 필터링. RAG는 전체 검색을 의미한다.
+        if (category != null && !category.isBlank() && !"RAG".equalsIgnoreCase(category)) {
             FilterExpressionBuilder b = new FilterExpressionBuilder();
             searchBuilder.filterExpression(b.eq("category", category).build());
         }
@@ -216,11 +223,15 @@ public class RagChatService {
     }
 
     private String resolveCategory(String category, String question) {
-        if (category != null && !category.isBlank()) {
+        if (category != null && !category.isBlank() && !"RAG".equalsIgnoreCase(category.trim())) {
             return category.trim();
         }
 
         String q = sanitize(question);
+        if (hasAny(q, "불량사진", "불량 사진", "불량 증빙", "증빙 사진", "증빙 파일", "첨부", "파일",
+                "화면", "어디서", "어디에서", "메뉴", "경로", "조회 화면", "리스트", "지시서 화면")) {
+            return "wms-ui-guide";
+        }
         if (hasAny(q, "상태", "의미", "정의", "차이", "검수 대기", "적치 진행", "승인 완료", "가용", "예약")) {
             return "wms-status-definitions";
         }
@@ -230,14 +241,28 @@ public class RagChatService {
         if (hasAny(q, "모니터", "케이블", "충전기", "전자기기", "고가", "보관", "SKU")) {
             return "wms-electronics-storage-guide";
         }
-        if (hasAny(q, "화면", "어디서", "메뉴", "경로", "조회 화면", "리스트", "지시서 화면")) {
-            return "wms-ui-guide";
-        }
         if (hasAny(q, "절차", "순서", "프로세스", "뭐부터", "처리해야", "해야 해", "하면 돼", "대응",
                 "방법", "어떻게", "알려줘", "피킹", "패킹", "검수", "적치")) {
             return "wms-work-procedures";
         }
         return "RAG";
+    }
+
+    private List<Document> retryWithoutCategoryIfEmpty(String question, String category, List<Document> documents) {
+        if (!documents.isEmpty() || category == null || category.isBlank() || "RAG".equalsIgnoreCase(category)) {
+            return documents;
+        }
+        try {
+            long retryStartedAt = System.nanoTime();
+            List<Document> fallbackDocuments = vectorStore.similaritySearch(buildSearchRequest(question, "RAG"));
+            log.info("[AI_RAG_RETRY] reason=empty_category_result, category={}, fallbackTopK={}, retryMs={}, question='{}'",
+                    category, fallbackDocuments.size(), elapsedMs(retryStartedAt), sanitize(question));
+            return fallbackDocuments;
+        } catch (Exception e) {
+            log.warn("[AI_RAG_RETRY] failed category={}, reason={}, question='{}'",
+                    category, e.getMessage(), sanitize(question));
+            return documents;
+        }
     }
 
     private Optional<RagResponseCacheService.CachedAnswer> findSimilarQuietly(String question, String source) {

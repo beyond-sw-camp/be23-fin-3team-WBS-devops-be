@@ -66,6 +66,10 @@ spring:
             read-timeout: ${ACCOUNT_SERVICE_READ_TIMEOUT_MS:120000}
 
 wms:
+  rag:
+    auto-ingest:
+      enabled: ${RAG_AUTO_INGEST_ENABLED:true}
+      location: ${RAG_AUTO_INGEST_LOCATION:classpath:/knowledge/*.txt}
   readonly-datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     jdbc-url: ${WMS_READONLY_DB_URL}

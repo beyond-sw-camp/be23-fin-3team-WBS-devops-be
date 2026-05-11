@@ -38,6 +38,10 @@ public class OutboundOrderDetailResDto {
     // 승인자명 (TODO: Feign Client로 Account Service 조회)
     private String approvedByName;
 
+    // 작업자 자동 배정 대상자
+    private UUID assignedTo;
+    private String assignedToName;
+
     // 출고 예정일
     private LocalDate scheduledDate;
 

@@ -66,7 +66,7 @@ public class RagResponseCacheService {
         if (normalizedQuestion.isBlank() || normalizedAnswer.isBlank()) {
             return;
         }
-        if (normalizedAnswer.contains("제공된 문서에 해당 내용이 없습니다")) {
+        if (isUncacheableFallback(normalizedAnswer)) {
             return;
         }
 
@@ -126,6 +126,12 @@ public class RagResponseCacheService {
 
     private String normalize(String value) {
         return value == null ? "" : value.replaceAll("\\s+", " ").trim();
+    }
+
+    private boolean isUncacheableFallback(String answer) {
+        return answer.contains("제공된 문서에 해당 내용이 없습니다")
+                || answer.contains("요청하신 질문을 처리할 수 없습니다")
+                || answer.contains("처리할 수 없습니다");
     }
 
     private String truncate(String value, int maxLength) {
