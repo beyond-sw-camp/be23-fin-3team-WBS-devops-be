@@ -105,6 +105,23 @@ public class RagResponseCacheService {
         );
     }
 
+    public int evictBySource(String source) {
+        String normalizedSource = normalize(source);
+        if (normalizedSource.isBlank()) {
+            return 0;
+        }
+
+        ensureTable();
+        int rows = jdbcTemplate.update("""
+                        DELETE FROM rag_response_cache
+                        WHERE source = ?
+                        """,
+                normalizedSource
+        );
+        log.info("[AI_RAG_CACHE_EVICT] source={}, rows={}", normalizedSource, rows);
+        return rows;
+    }
+
     private void ensureTable() {
         jdbcTemplate.execute("""
                 CREATE TABLE IF NOT EXISTS rag_response_cache (

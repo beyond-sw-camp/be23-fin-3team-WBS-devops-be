@@ -47,6 +47,14 @@ public class OpenAiChatGateway {
     }
 
     public String complete(String systemPrompt, String userPrompt) {
+        return complete(systemPrompt, userPrompt, null);
+    }
+
+    public String completeJson(String systemPrompt, String userPrompt) {
+        return complete(systemPrompt, userPrompt, Map.of("type", "json_object"));
+    }
+
+    private String complete(String systemPrompt, String userPrompt, Map<String, Object> responseFormat) {
         try {
             List<Map<String, String>> messages = systemPrompt == null || systemPrompt.isBlank()
                     ? List.of(Map.of("role", "user", "content", userPrompt))
@@ -55,12 +63,14 @@ public class OpenAiChatGateway {
                     Map.of("role", "user", "content", userPrompt)
             );
 
-            Map<String, Object> request = Map.of(
-                    "model", model,
-                    "temperature", temperature,
-                    "max_tokens", maxTokens,
-                    "messages", messages
-            );
+            Map<String, Object> request = new java.util.LinkedHashMap<>();
+            request.put("model", model);
+            request.put("temperature", temperature);
+            request.put("max_tokens", maxTokens);
+            request.put("messages", messages);
+            if (responseFormat != null && !responseFormat.isEmpty()) {
+                request.put("response_format", responseFormat);
+            }
 
             String requestBody = objectMapper.writeValueAsString(request);
             HttpRequest httpRequest = HttpRequest.newBuilder()

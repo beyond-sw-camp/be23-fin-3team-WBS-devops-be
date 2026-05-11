@@ -4,6 +4,8 @@ import com.beyond.wbs.ai.chat.dto.ChatTurn;
 import com.beyond.wbs.ai.openai.OpenAiChatGateway;
 import com.beyond.wbs.ai.rag.RagChatService;
 import com.beyond.wbs.ai.workquery.WorkQueryService;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -11,6 +13,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.TextStyle;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -57,6 +60,12 @@ public class ChatRoutingService {
             "(?i).*(로또|복권|점심|메뉴\\s*추천|저녁\\s*추천|맛집|연애|운세|사주).*"
     );
 
+    private static final Pattern BOT_PERSONAL_LIFE_HINT = Pattern.compile(
+            "(?i).*((너|넌|너는|니|너도|챗봇|ai).*(먹었|먹냐|먹어|밥|식사|점심|저녁)|" +
+                    "(밥|식사|점심|저녁).*(먹었|먹냐|먹어)|" +
+                    "^(먹었냐|밥\\s*먹었냐|식사\\s*했냐)[\\s!?？!.]*$).*"
+    );
+
     private static final Pattern DATE_TIME_HINT = Pattern.compile(
             "(?i).*((오늘|내일|어제)\\s*(날짜|요일)|지금\\s*몇\\s*시|현재\\s*시간|오늘\\s*며칠|날짜\\s*알려|요일\\s*알려).*"
     );
@@ -76,8 +85,10 @@ public class ChatRoutingService {
     );
 
     private static final String SENSITIVE_BLOCK_ANSWER = "해당 정보는 개인 정보에 해당되어 답변이 불가합니다.";
+    private static final String UNSUPPORTED_ANSWER = "해당 질문은 답변이 불가합니다. 업무, 매뉴얼 등 편하게 물어보세요.";
 
     private final OpenAiChatGateway openAiChatGateway;
+    private final ObjectMapper objectMapper;
     private final RagChatService ragChatService;
     private final WorkQueryService workQueryService;
 
@@ -99,26 +110,29 @@ public class ChatRoutingService {
             return RouteResult.blocked(sensitiveDecision.reason(), SENSITIVE_BLOCK_ANSWER, elapsedMs(startedAt));
         }
 
-        ClassificationDecision decision = classify(normalizedQuestion, safeHistory, context);
+        RoutingDecision decision = classify(normalizedQuestion, safeHistory, context);
         log.info("[AI_CHAT_ROUTE] mode={}, reason={}, clientId={}, userId={}, question='{}'",
                 decision.mode(), decision.reason(), mask(clientId), mask(userId), normalizedQuestion);
 
         if (decision.mode() == ChatMode.GENERAL) {
             return RouteResult.general(
                     decision.reason(),
-                    generalAnswer(normalizedQuestion, userName),
+                    decision.answer() == null || decision.answer().isBlank()
+                            ? generalAnswer(normalizedQuestion, userName)
+                            : decision.answer(),
                     elapsedMs(startedAt)
             );
         }
 
         if (decision.mode() == ChatMode.WORK_QUERY) {
             try {
-                WorkQueryService.WorkQueryResponse response = workQueryService.ask(
+                WorkQueryService.WorkQueryResponse response = workQueryService.askWithRoute(
                         normalizedQuestion,
                         safeHistory,
                         context,
                         clientId,
-                        userId
+                        userId,
+                        decision.toWorkQueryRoute()
                 );
                 return RouteResult.workQuery(
                         decision.reason(),
@@ -180,12 +194,12 @@ public class ChatRoutingService {
                 || message.contains("HTTP 429"));
     }
 
-    private ClassificationDecision classify(
+    private RoutingDecision classify(
             String question,
             List<ChatTurn> history,
             WorkQueryService.WorkQueryContext context) {
         if (question.isBlank()) {
-            return new ClassificationDecision(ChatMode.GENERAL, "default_general_blank_question");
+            return RoutingDecision.general("default_general_blank_question", null);
         }
 
         boolean workQueryHint = WORK_QUERY_HINT.matcher(question).find();
@@ -194,21 +208,21 @@ public class ChatRoutingService {
                 && SHORT_FOLLOW_UP.matcher(question).matches();
 
         if (isUserIdentityQuestion(question) || isObviousGeneral(question) || isDeterministicGeneral(question)) {
-            return new ClassificationDecision(ChatMode.GENERAL, "heuristic_general_chat");
+            return RoutingDecision.general("deterministic_boundary", null);
         }
 
         try {
-            ClassificationDecision llmDecision = classifyWithLlm(question, history);
+            RoutingDecision llmDecision = classifyWithLlm(question, history, context);
             return guardLlmDecision(llmDecision, workQueryHint, ragHint, followUpHint);
         } catch (Exception e) {
             log.warn("[AI_CHAT_ROUTE] llm_classification_failed question='{}', reason={}", question, e.getMessage());
             if (ragHint) {
-                return new ClassificationDecision(ChatMode.RAG, "fallback_rag_after_llm_error");
+                return RoutingDecision.rag("fallback_rag_after_llm_error");
             }
             if (followUpHint || workQueryHint) {
-                return new ClassificationDecision(ChatMode.WORK_QUERY, "fallback_work_query_after_llm_error");
+                return RoutingDecision.workQuery("fallback_work_query_after_llm_error");
             }
-            return new ClassificationDecision(ChatMode.GENERAL, "fallback_general_after_llm_error");
+            return RoutingDecision.general("fallback_general_after_llm_error", UNSUPPORTED_ANSWER);
         }
     }
 
@@ -287,6 +301,7 @@ public class ChatRoutingService {
     private boolean isDeterministicGeneral(String question) {
         return OFFENSIVE_HINT.matcher(question).matches()
                 || OFF_TOPIC_HINT.matcher(question).matches()
+                || BOT_PERSONAL_LIFE_HINT.matcher(question).matches()
                 || DATE_TIME_HINT.matcher(question).matches()
                 || UNSUPPORTED_ADMIN_HINT.matcher(question).matches();
     }
@@ -295,74 +310,134 @@ public class ChatRoutingService {
         return USER_IDENTITY_QUESTION.matcher(question).matches();
     }
 
-    private ClassificationDecision guardLlmDecision(
-            ClassificationDecision llmDecision,
+    private RoutingDecision guardLlmDecision(
+            RoutingDecision llmDecision,
             boolean workQueryHint,
             boolean ragHint,
             boolean followUpHint) {
         if (followUpHint && llmDecision.mode() == ChatMode.GENERAL) {
-            return new ClassificationDecision(ChatMode.WORK_QUERY, llmDecision.reason() + "_guarded_followup");
+            return RoutingDecision.workQuery(llmDecision.reason() + "_guarded_followup");
         }
-        if (ragHint && llmDecision.mode() == ChatMode.GENERAL) {
-            return new ClassificationDecision(ChatMode.RAG, llmDecision.reason() + "_guarded_rag");
+        if (ragHint && llmDecision.mode() == ChatMode.GENERAL && llmDecision.confidence() < 0.80) {
+            return RoutingDecision.rag(llmDecision.reason() + "_guarded_rag");
         }
-        if (workQueryHint && llmDecision.mode() == ChatMode.GENERAL) {
-            return new ClassificationDecision(ChatMode.WORK_QUERY, llmDecision.reason() + "_guarded_work_query");
+        if (workQueryHint && llmDecision.mode() == ChatMode.GENERAL && llmDecision.confidence() < 0.80) {
+            return RoutingDecision.workQuery(llmDecision.reason() + "_guarded_work_query");
         }
         return llmDecision;
     }
 
-    private ClassificationDecision classifyWithLlm(String question, List<ChatTurn> history) {
+    private RoutingDecision classifyWithLlm(
+            String question,
+            List<ChatTurn> history,
+            WorkQueryService.WorkQueryContext context) {
         String historyBlock = formatHistory(history);
-        String prompt = """
-                너는 Spring Boot MSA 기반 WMS 챗봇의 라우터다.
-                사용자의 현재 질문을 보고 어떤 기능 API를 호출할지 선택한다.
+        String systemPrompt = """
+                너는 WMS 관리자용 AI 챗봇의 tool router다.
+                사용자의 현재 질문을 보고 백엔드가 실행할 action을 JSON으로만 결정한다.
 
-                [WORK_QUERY]
-                - 현재 업무 데이터 조회 API를 호출해야 하는 질문
-                - 예: 내 피킹 작업, 오늘 처리할 지시서, 입고/출고 현황, 재고 위치, 부족 재고
-                - DB에 있는 현재 상태/수량/목록/건수를 알아야 답할 수 있는 질문
-                - 상품/품목/창고/재고/지시서/피킹/입고/출고의 현재 상태를 묻는 질문
-                - 예: 마우스 어딨어, 마우스 위치 알려줘, 오늘 뭐해야돼, 5월 6일에 뭐해야돼
+                사용할 수 있는 action:
+                - WORK_QUERY: 현재 업무 데이터 조회. 재고 위치/수량, 입고/출고/피킹/이동/실사 상태, 오늘 처리할 작업, 미처리 지시서 등.
+                - RAG: 업무 매뉴얼/화면 경로/절차/정책/오류 원인/사용법 설명.
+                - GENERAL: 인사, 감사, 챗봇 소개, 할 수 있는 일 안내.
+                - UNSUPPORTED: WMS 업무나 매뉴얼과 무관하거나, 챗봇 개인 생활/식사/감정/잡담/추천을 묻는 질문.
 
-                [RAG]
-                - pgvector 문서 검색 API를 호출해야 하는 질문
-                - 예: 화면 사용법, 상태값 의미, 업무 절차, 예외 처리 기준, 전자기기 보관 주의사항, 작업 실패 원인
-                - 예: 불량 사진 어디서 봐, 증빙 파일 어디서 확인해, 어느 메뉴에서 봐?
-                - 운영 매뉴얼/FAQ/정책/기준을 근거로 답해야 하는 질문
-                - 특정 상품명이 있어도 "출고 어떻게 해", "왜 실패해?", "왜 안 돼?"처럼 방법/원인/절차를 묻는 질문은 RAG다.
-                - "어디서 봐?", "어느 화면?", "어느 메뉴?"처럼 화면 경로나 확인 위치를 묻는 질문은 RAG다.
+                엄격한 기준:
+                - "점심 뭐 먹을까", "넌 먹었냐", "밥 먹었어?", "로또", "연애", "운세"는 UNSUPPORTED.
+                - WMS 업무 목적이 명확하지 않은 짧은 잡담은 UNSUPPORTED.
+                - 단어 하나가 업무 단어처럼 보여도 문장 의도가 업무 조회/매뉴얼이 아니면 UNSUPPORTED.
+                - 현재 DB 상태를 봐야 하면 WORK_QUERY.
+                - 절차, 위치한 메뉴, 왜 실패하는지, 어떻게 하는지 설명이면 RAG.
+                - 최근 대화에 조회 결과가 있고 "하위는?", "오늘은?" 같은 후속 질문이면 WORK_QUERY.
+                - 애매하면 UNSUPPORTED.
 
-                [GENERAL]
-                - 인사, 감사, 챗봇 소개, 할 수 있는 일 안내처럼 DB나 문서 검색이 필요 없는 일반 대화
-                - 예: 안녕, 고마워, 너 누구야, 뭐 할 수 있어?
-                - 상품명이나 업무 대상이 포함된 질문은 GENERAL이 아니다.
+                JSON 스키마:
+                {
+                  "action": "WORK_QUERY|RAG|GENERAL|UNSUPPORTED",
+                  "confidence": 0.0,
+                  "reason": "짧은 내부 사유",
+                  "target": "STOCK|MASTER|ACCOUNT 또는 빈 문자열",
+                  "intent": "WORK_QUERY일 때 업무 intent. 예: INVENTORY_LOCATION, PENDING_WORK, INBOUND_STATUS",
+                  "slots": {"keyword":"","product":"","warehouse":"","status":"","date":"","date_from":"","date_to":""},
+                  "answer": "GENERAL 또는 UNSUPPORTED일 때 사용자에게 바로 보여줄 답변. 그 외 빈 문자열"
+                }
 
-                규칙:
-                - 반드시 WORK_QUERY, RAG, GENERAL 중 한 단어만 출력한다.
-                - 설명, JSON, markdown 금지.
-                - 짧은 후속 질문은 최근 대화 맥락을 보고 같은 기능으로 분류한다.
-                - 재고 위치/수량/존재 여부/오늘 할 일/지시서 목록은 말투가 짧거나 구어체여도 WORK_QUERY다.
-                - 방법/절차/기준/의미/왜/실패 원인을 묻는 설명형 질문은 RAG다.
-                - 현재 재고 위치/수량/존재 여부/작업 목록을 직접 묻는 질문만 WORK_QUERY다.
+                응답 규칙:
+                - 반드시 JSON object만 출력한다.
+                - markdown, 설명, 코드블록 금지.
+                - UNSUPPORTED answer는 반드시 "해당 질문은 답변이 불가합니다. 업무, 매뉴얼 등 편하게 물어보세요." 로 출력한다.
+                - WORK_QUERY를 선택하면 target, intent, slots를 함께 채운다.
+                - STOCK intent: MY_PICKING_TASKS, PENDING_WORK, INBOUND_STATUS, OUTBOUND_STATUS, INVENTORY_LOCATION, LOW_STOCK
+                - MASTER intent: PRODUCT_INFO, WAREHOUSE_INFO, LOCATION_INFO, SUPPLIER_INFO, STORE_INFO
+                - ACCOUNT intent: USER_INFO, ROLE_INFO, CLIENT_INFO
+                """;
 
+        String userPrompt = """
                 최근 대화:
                 %s
 
-                [현재 질문]
+                이전 업무 조회 컨텍스트 존재: %s
+
+                현재 질문:
                 %s
-                """.formatted(historyBlock.isBlank() ? "(없음)" : historyBlock, question);
+                """.formatted(
+                historyBlock.isBlank() ? "(없음)" : historyBlock,
+                context != null && context.rows() != null && !context.rows().isEmpty(),
+                question);
 
-        String response = openAiChatGateway.complete(prompt, question);
+        String response = openAiChatGateway.completeJson(systemPrompt, userPrompt);
+        return parseRoutingDecision(response);
+    }
 
-        String normalized = normalize(response).toUpperCase(Locale.ROOT);
-        if (normalized.contains("WORK_QUERY")) {
-            return new ClassificationDecision(ChatMode.WORK_QUERY, "llm_work_query");
+    private RoutingDecision parseRoutingDecision(String raw) {
+        JsonNode root;
+        try {
+            root = objectMapper.readTree(raw);
+        } catch (Exception e) {
+            String normalized = normalize(raw).toUpperCase(Locale.ROOT);
+            if (normalized.contains("WORK_QUERY")) {
+                return new RoutingDecision(ChatMode.WORK_QUERY, "llm_work_query", 0.50, null, "", "", Map.of());
+            }
+            if (normalized.contains("RAG")) {
+                return new RoutingDecision(ChatMode.RAG, "llm_rag", 0.50, null, "", "", Map.of());
+            }
+            if (normalized.contains("GENERAL")) {
+                return new RoutingDecision(ChatMode.GENERAL, "llm_general", 0.50, null, "", "", Map.of());
+            }
+            throw new IllegalArgumentException("라우팅 JSON 파싱 실패: " + raw, e);
         }
-        if (normalized.contains("GENERAL")) {
-            return new ClassificationDecision(ChatMode.GENERAL, "llm_general");
+        String action = normalize(root.path("action").asText()).toUpperCase(Locale.ROOT);
+        double confidence = root.path("confidence").isNumber() ? root.path("confidence").asDouble() : 0.0;
+        String reason = normalize(root.path("reason").asText());
+        String answer = normalize(root.path("answer").asText());
+        String target = normalize(root.path("target").asText());
+        String intent = normalize(root.path("intent").asText());
+        Map<String, String> slots = parseSlots(root.path("slots"));
+
+        if ("WORK_QUERY".equals(action)) {
+            return new RoutingDecision(ChatMode.WORK_QUERY, reason.isBlank() ? "llm_json_work_query" : reason, confidence, null,
+                    target, intent, slots);
         }
-        return new ClassificationDecision(ChatMode.RAG, "llm_rag");
+        if ("RAG".equals(action)) {
+            return new RoutingDecision(ChatMode.RAG, reason.isBlank() ? "llm_json_rag" : reason, confidence, null, "", "", Map.of());
+        }
+        if ("GENERAL".equals(action)) {
+            return new RoutingDecision(ChatMode.GENERAL, reason.isBlank() ? "llm_json_general" : reason, confidence, answer, "", "", Map.of());
+        }
+        if ("UNSUPPORTED".equals(action)) {
+            return new RoutingDecision(ChatMode.GENERAL, reason.isBlank() ? "llm_json_unsupported" : reason, confidence,
+                    answer.isBlank() ? UNSUPPORTED_ANSWER : answer, "", "", Map.of());
+        }
+        throw new IllegalArgumentException("지원하지 않는 라우팅 action: " + action);
+    }
+
+    private Map<String, String> parseSlots(JsonNode slotsNode) {
+        if (slotsNode == null || !slotsNode.isObject()) {
+            return Map.of();
+        }
+        Map<String, String> slots = new LinkedHashMap<>();
+        slotsNode.fields().forEachRemaining((entry) -> slots.put(entry.getKey(), normalize(entry.getValue().asText())));
+        return slots;
     }
 
     private String generalAnswer(String question, String userName) {
@@ -379,11 +454,8 @@ public class ChatRoutingService {
             return "오늘은 %d년 %d월 %d일 %s입니다. 특정 날짜의 처리 작업이 궁금하면 \"5월 8일에 할 일 뭐야?\"처럼 물어보세요."
                     .formatted(today.getYear(), today.getMonthValue(), today.getDayOfMonth(), dayOfWeek);
         }
-        if (normalized.contains("로또") || normalized.contains("복권")) {
-            return "로또 번호 추천은 지원하지 않습니다. 대신 재고 위치, 미처리 작업, 부족 재고처럼 WMS 업무와 관련된 질문을 도와드릴 수 있습니다.";
-        }
-        if (normalized.contains("점심") || normalized.contains("메뉴 추천") || normalized.contains("저녁 추천") || normalized.contains("맛집")) {
-            return "식사 메뉴 추천은 지원 범위 밖입니다. WMS 업무 중 재고, 입고, 출고, 피킹, 작업 상태가 궁금하면 바로 물어보세요.";
+        if (OFF_TOPIC_HINT.matcher(normalized).matches() || BOT_PERSONAL_LIFE_HINT.matcher(normalized).matches()) {
+            return UNSUPPORTED_ANSWER;
         }
         if (normalized.contains("휴무") || normalized.contains("휴가") || normalized.contains("연차") || normalized.contains("근태")) {
             return "휴무나 근태 일정은 현재 WMS 챗봇 조회 범위에 포함되어 있지 않습니다. 사내 근태 시스템이나 담당 관리자에게 확인해 주세요.";
@@ -446,7 +518,29 @@ public class ChatRoutingService {
         return (System.nanoTime() - startedAt) / 1_000_000;
     }
 
-    private record ClassificationDecision(ChatMode mode, String reason) {
+    private record RoutingDecision(
+            ChatMode mode,
+            String reason,
+            double confidence,
+            String answer,
+            String target,
+            String intent,
+            Map<String, String> slots) {
+        private static RoutingDecision workQuery(String reason) {
+            return new RoutingDecision(ChatMode.WORK_QUERY, reason, 1.0, null, "", "", Map.of());
+        }
+
+        private static RoutingDecision rag(String reason) {
+            return new RoutingDecision(ChatMode.RAG, reason, 1.0, null, "", "", Map.of());
+        }
+
+        private static RoutingDecision general(String reason, String answer) {
+            return new RoutingDecision(ChatMode.GENERAL, reason, 1.0, answer, "", "", Map.of());
+        }
+
+        private WorkQueryService.WorkQueryRoute toWorkQueryRoute() {
+            return new WorkQueryService.WorkQueryRoute(target, intent, slots, confidence, "chat-router:" + reason);
+        }
     }
 
     private record SensitiveDecision(boolean blocked, String reason) {

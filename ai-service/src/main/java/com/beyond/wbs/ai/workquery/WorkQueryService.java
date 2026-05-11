@@ -50,6 +50,16 @@ public class WorkQueryService {
             WorkQueryContext context,
             String clientId,
             String userId) {
+        return askWithRoute(message, history, context, clientId, userId, null);
+    }
+
+    public WorkQueryResponse askWithRoute(
+            String message,
+            List<ChatTurn> history,
+            WorkQueryContext context,
+            String clientId,
+            String userId,
+            WorkQueryRoute requestedRoute) {
         long startedAt = System.nanoTime();
         String question = normalize(message);
         if (question.isBlank()) {
@@ -60,10 +70,15 @@ public class WorkQueryService {
         RouteResult contextualInventoryRoute = followUp == null
                 ? resolveContextualInventoryRoute(question, context)
                 : null;
+        RouteResult externalRoute = followUp == null && contextualInventoryRoute == null
+                ? routeFromExternalDecision(question, requestedRoute)
+                : null;
         RouteResult route = followUp != null
                 ? RouteResult.followUp(followUp.intent())
                 : contextualInventoryRoute != null
                 ? contextualInventoryRoute
+                : externalRoute != null
+                ? externalRoute
                 : routeWithLlm(question, history);
         Intent intent = route.intent();
         WorkQueryTarget target = route.target();
@@ -93,6 +108,29 @@ public class WorkQueryService {
                     target, intent, followUp != null, elapsedMs(startedAt), mask(clientId), mask(userId), question, e.getMessage(), e);
             throw e;
         }
+    }
+
+    private RouteResult routeFromExternalDecision(String question, WorkQueryRoute requestedRoute) {
+        if (requestedRoute == null || isBlank(requestedRoute.intent())) {
+            return null;
+        }
+        Intent intent = parseIntent(requestedRoute.intent());
+        if (intent == null) {
+            return null;
+        }
+        WorkQueryTarget target = parseTarget(requestedRoute.target());
+        if (target == null || !supportsIntent(target, intent)) {
+            target = defaultTarget(intent);
+        }
+        Map<String, String> slots = normalizeSlots(requestedRoute.slots(), question);
+        RouteResult route = new RouteResult(
+                target,
+                intent,
+                requestedRoute.confidence(),
+                slots,
+                isBlank(requestedRoute.source()) ? "chat-router" : requestedRoute.source()
+        );
+        return refineRoute(question, route);
     }
 
     private RouteResult routeWithLlm(String question, List<ChatTurn> history) {
@@ -1128,6 +1166,14 @@ public class WorkQueryService {
             String intent,
             String answer,
             List<Map<String, Object>> rows) {
+    }
+
+    public record WorkQueryRoute(
+            String target,
+            String intent,
+            Map<String, String> slots,
+            double confidence,
+            String source) {
     }
 
     private record AnswerResult(String answer, long llmMs, boolean fallback) {
