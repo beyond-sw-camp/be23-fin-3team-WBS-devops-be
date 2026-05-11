@@ -44,7 +44,7 @@ public class AiWorkQueryService {
             case LOW_STOCK -> queryLowStock(clientId, limit);
             case INBOUND_STATUS -> queryInboundStatus(clientId, limit);
             case OUTBOUND_STATUS -> queryOutboundStatus(clientId, limit);
-            case PENDING_WORK -> queryPendingWork(clientId, slot(slots, "date"), limit);
+            case PENDING_WORK -> queryPendingWork(clientId, slots, limit);
         };
 
         rows = enrichAssignedUsers(userId, rows);
@@ -170,8 +170,8 @@ public class AiWorkQueryService {
                 """, blankToNull(clientId), blankToNull(clientId), limit);
     }
 
-    private List<Map<String, Object>> queryPendingWork(String clientId, String date, int limit) {
-        LocalDate targetDate = normalizeDate(date);
+    private List<Map<String, Object>> queryPendingWork(String clientId, Map<String, String> slots, int limit) {
+        DateRange dateRange = normalizeDateRange(slots);
         List<Map<String, Object>> rows = new ArrayList<>();
         rows.addAll(jdbcTemplate.queryForList("""
                 SELECT CASE
@@ -187,10 +187,11 @@ public class AiWorkQueryService {
                 JOIN master_db.warehouses w ON w.id = io.warehouse_id
                 WHERE (? IS NULL OR io.client_id = UNHEX(REPLACE(?, '-', '')))
                   AND io.status IN ('approved', 'received', 'placing', 'partial')
-                  AND (? IS NULL OR io.expected_date = ?)
+                  AND (? IS NULL OR io.expected_date >= ?)
+                  AND (? IS NULL OR io.expected_date <= ?)
                 ORDER BY io.expected_date ASC
                 LIMIT ?
-                """, blankToNull(clientId), blankToNull(clientId), targetDate, targetDate, limit));
+                """, blankToNull(clientId), blankToNull(clientId), dateRange.from(), dateRange.from(), dateRange.to(), dateRange.to(), limit));
         rows.addAll(jdbcTemplate.queryForList("""
                 SELECT '적치' AS work_type,
                        po.placement_no AS document_no,
@@ -202,10 +203,11 @@ public class AiWorkQueryService {
                 JOIN master_db.warehouses w ON w.id = po.warehouse_id
                 WHERE (? IS NULL OR po.client_id = UNHEX(REPLACE(?, '-', '')))
                   AND po.status IN ('pending', 'in_progress')
-                  AND (? IS NULL OR DATE(po.created_at) = ?)
+                  AND (? IS NULL OR DATE(po.created_at) >= ?)
+                  AND (? IS NULL OR DATE(po.created_at) <= ?)
                 ORDER BY po.created_at ASC
                 LIMIT ?
-                """, blankToNull(clientId), blankToNull(clientId), targetDate, targetDate, limit));
+                """, blankToNull(clientId), blankToNull(clientId), dateRange.from(), dateRange.from(), dateRange.to(), dateRange.to(), limit));
         rows.addAll(jdbcTemplate.queryForList("""
                 SELECT '피킹' AS work_type,
                        pl.picking_no AS document_no,
@@ -217,10 +219,11 @@ public class AiWorkQueryService {
                 JOIN master_db.warehouses w ON w.id = pl.warehouse_id
                 WHERE (? IS NULL OR pl.client_id = UNHEX(REPLACE(?, '-', '')))
                   AND pl.status IN ('pending', 'in_progress')
-                  AND (? IS NULL OR DATE(pl.created_at) = ?)
+                  AND (? IS NULL OR DATE(pl.created_at) >= ?)
+                  AND (? IS NULL OR DATE(pl.created_at) <= ?)
                 ORDER BY pl.created_at ASC
                 LIMIT ?
-                """, blankToNull(clientId), blankToNull(clientId), targetDate, targetDate, limit));
+                """, blankToNull(clientId), blankToNull(clientId), dateRange.from(), dateRange.from(), dateRange.to(), dateRange.to(), limit));
         rows.addAll(jdbcTemplate.queryForList("""
                 SELECT '출고 완료' AS work_type,
                        oo.order_no AS document_no,
@@ -232,10 +235,11 @@ public class AiWorkQueryService {
                 JOIN master_db.warehouses w ON w.id = oo.warehouse_id
                 WHERE (? IS NULL OR oo.client_id = UNHEX(REPLACE(?, '-', '')))
                   AND oo.status IN ('approved', 'in_progress', 'partial')
-                  AND (? IS NULL OR oo.scheduled_date = ?)
+                  AND (? IS NULL OR oo.scheduled_date >= ?)
+                  AND (? IS NULL OR oo.scheduled_date <= ?)
                 ORDER BY oo.scheduled_date ASC
                 LIMIT ?
-                """, blankToNull(clientId), blankToNull(clientId), targetDate, targetDate, limit));
+                """, blankToNull(clientId), blankToNull(clientId), dateRange.from(), dateRange.from(), dateRange.to(), dateRange.to(), limit));
         rows.addAll(jdbcTemplate.queryForList("""
                 SELECT '재고 실사' AS work_type,
                        sco.order_no AS document_no,
@@ -247,10 +251,11 @@ public class AiWorkQueryService {
                 JOIN master_db.warehouses w ON w.id = sco.warehouse_id
                 WHERE (? IS NULL OR sco.client_id = UNHEX(REPLACE(?, '-', '')))
                   AND sco.status IN ('in_progress')
-                  AND (? IS NULL OR DATE(sco.created_at) = ?)
+                  AND (? IS NULL OR DATE(sco.created_at) >= ?)
+                  AND (? IS NULL OR DATE(sco.created_at) <= ?)
                 ORDER BY sco.created_at ASC
                 LIMIT ?
-                """, blankToNull(clientId), blankToNull(clientId), targetDate, targetDate, limit));
+                """, blankToNull(clientId), blankToNull(clientId), dateRange.from(), dateRange.from(), dateRange.to(), dateRange.to(), limit));
         rows.addAll(jdbcTemplate.queryForList("""
                 SELECT '이동' AS work_type,
                        tr.order_no AS document_no,
@@ -263,10 +268,11 @@ public class AiWorkQueryService {
                 JOIN master_db.warehouses tw ON tw.id = tr.to_warehouse_id
                 WHERE (? IS NULL OR tr.client_id = UNHEX(REPLACE(?, '-', '')))
                   AND tr.status IN ('approved', 'in_progress', 'partial')
-                  AND (? IS NULL OR tr.expected_date = ?)
+                  AND (? IS NULL OR tr.expected_date >= ?)
+                  AND (? IS NULL OR tr.expected_date <= ?)
                 ORDER BY tr.expected_date ASC
                 LIMIT ?
-                """, blankToNull(clientId), blankToNull(clientId), targetDate, targetDate, limit));
+                """, blankToNull(clientId), blankToNull(clientId), dateRange.from(), dateRange.from(), dateRange.to(), dateRange.to(), limit));
         rows.addAll(jdbcTemplate.queryForList("""
                 SELECT '기타 입출고' AS work_type,
                        eo.order_no AS document_no,
@@ -278,10 +284,11 @@ public class AiWorkQueryService {
                 JOIN master_db.warehouses w ON w.id = eo.warehouse_id
                 WHERE (? IS NULL OR eo.client_id = UNHEX(REPLACE(?, '-', '')))
                   AND eo.status IN ('approved')
-                  AND (? IS NULL OR DATE(eo.created_at) = ?)
+                  AND (? IS NULL OR DATE(eo.created_at) >= ?)
+                  AND (? IS NULL OR DATE(eo.created_at) <= ?)
                 ORDER BY eo.created_at ASC
                 LIMIT ?
-                """, blankToNull(clientId), blankToNull(clientId), targetDate, targetDate, limit));
+                """, blankToNull(clientId), blankToNull(clientId), dateRange.from(), dateRange.from(), dateRange.to(), dateRange.to(), limit));
         return rows.stream()
                 .limit(limit)
                 .toList();
@@ -376,6 +383,14 @@ public class AiWorkQueryService {
         }
     }
 
+    private DateRange normalizeDateRange(Map<String, String> slots) {
+        LocalDate exactDate = normalizeDate(slot(slots, "date"));
+        if (exactDate != null) {
+            return new DateRange(exactDate, exactDate);
+        }
+        return new DateRange(normalizeDate(slot(slots, "date_from")), normalizeDate(slot(slots, "date_to")));
+    }
+
     private boolean isBlank(String value) {
         return value == null || value.isBlank();
     }
@@ -389,6 +404,9 @@ public class AiWorkQueryService {
 
     private long elapsedMs(long startedAt) {
         return (System.nanoTime() - startedAt) / 1_000_000;
+    }
+
+    private record DateRange(LocalDate from, LocalDate to) {
     }
 
     private enum Intent {

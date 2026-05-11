@@ -8,6 +8,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.format.TextStyle;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -18,6 +21,8 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class ChatRoutingService {
 
+    private static final ZoneId KOREA_ZONE = ZoneId.of("Asia/Seoul");
+
     private static final Pattern WORK_QUERY_HINT = Pattern.compile(
             "(?i)(몇\\s*개|몇\\s*건|건수|합계|총\\s*재고|총합|평균|상위|하위|top\\s*\\d*|bottom\\s*\\d*|" +
                     "상품별|창고별|위치별|비율|추이|현황|목록|오늘|어제|이번\\s*달|지난\\s*달|최근|" +
@@ -27,7 +32,11 @@ public class ChatRoutingService {
 
     private static final Pattern RAG_HINT = Pattern.compile(
             "(?i)(어떻게|방법|절차|프로세스|매뉴얼|sop|가이드|설명|의미|정의|정책|규정|기준|원칙|왜|차이|주의|" +
-                    "어디서|어디에서|어느\\s*화면|화면|메뉴|경로|사진|증빙|첨부|파일)"
+                    "어디서|어디에서|어느\\s*화면|화면|메뉴|경로|사진|증빙|첨부|파일|" +
+                    "시간\\s*연장|세션\\s*연장|세션\\s*만료|로그아웃|번호\\s*생성|채번|공통\\s*코드|" +
+                    "오류\\s*코드|에러\\s*코드|권한\\s*없|접근\\s*권한|메뉴.*안\\s*보|알림.*안\\s*와|" +
+                    "업로드\\s*실패|생성\\s*실패|완료.*안\\s*돼|안\\s*만들어|자동\\s*배정|자동배정|" +
+                    "수량.*다르|재고.*다르|엑셀\\s*다운로드|qr|바코드|비활성화.*안\\s*돼)"
     );
 
     private static final Pattern SHORT_FOLLOW_UP = Pattern.compile(
@@ -38,6 +47,22 @@ public class ChatRoutingService {
     private static final Pattern GENERAL_CHAT_HINT = Pattern.compile(
             "(?i)^(안녕|안녕하세요|하이|hello|hi|반가워|고마워|감사|땡큐|thanks|너\\s*누구|넌\\s*누구|" +
                     "나\\s*누구|난\\s*누구|나는\\s*누구|내가\\s*누구|뭐\\s*할\\s*수\\s*있|뭘\\s*할\\s*수\\s*있|도움말|사용법|시작|챗봇|ai\\s*챗봇)[\\s!?？!.]*$"
+    );
+
+    private static final Pattern OFFENSIVE_HINT = Pattern.compile(
+            "(?i).*(시발|씨발|ㅅㅂ|병신|ㅂㅅ|개새|새끼|꺼져|좆|존나|fuck|shit).*"
+    );
+
+    private static final Pattern OFF_TOPIC_HINT = Pattern.compile(
+            "(?i).*(로또|복권|점심|메뉴\\s*추천|저녁\\s*추천|맛집|연애|운세|사주).*"
+    );
+
+    private static final Pattern DATE_TIME_HINT = Pattern.compile(
+            "(?i).*((오늘|내일|어제)\\s*(날짜|요일)|지금\\s*몇\\s*시|현재\\s*시간|오늘\\s*며칠|날짜\\s*알려|요일\\s*알려).*"
+    );
+
+    private static final Pattern UNSUPPORTED_ADMIN_HINT = Pattern.compile(
+            "(?i).*(휴무|휴가|연차|근태|맞춤법|띄어쓰기|문법\\s*검사).*"
     );
 
     private static final Pattern USER_IDENTITY_QUESTION = Pattern.compile(
@@ -168,7 +193,7 @@ public class ChatRoutingService {
         boolean followUpHint = context != null && context.rows() != null && !context.rows().isEmpty()
                 && SHORT_FOLLOW_UP.matcher(question).matches();
 
-        if (isUserIdentityQuestion(question) || isObviousGeneral(question)) {
+        if (isUserIdentityQuestion(question) || isObviousGeneral(question) || isDeterministicGeneral(question)) {
             return new ClassificationDecision(ChatMode.GENERAL, "heuristic_general_chat");
         }
 
@@ -259,6 +284,13 @@ public class ChatRoutingService {
                 && !RAG_HINT.matcher(question).find();
     }
 
+    private boolean isDeterministicGeneral(String question) {
+        return OFFENSIVE_HINT.matcher(question).matches()
+                || OFF_TOPIC_HINT.matcher(question).matches()
+                || DATE_TIME_HINT.matcher(question).matches()
+                || UNSUPPORTED_ADMIN_HINT.matcher(question).matches();
+    }
+
     private boolean isUserIdentityQuestion(String question) {
         return USER_IDENTITY_QUESTION.matcher(question).matches();
     }
@@ -337,6 +369,27 @@ public class ChatRoutingService {
         String normalized = normalize(question).toLowerCase(Locale.ROOT);
         if (normalized.isBlank()) {
             return "질문을 입력해주시면 재고 위치, 오늘 처리할 지시서, 입고/출고 현황 등을 도와드리겠습니다.";
+        }
+        if (OFFENSIVE_HINT.matcher(normalized).matches()) {
+            return "업무 처리를 돕기 위해 정중한 표현으로 질문해 주세요. 재고 위치, 미처리 지시서, 입고/출고 현황처럼 확인할 내용을 말해주시면 바로 도와드리겠습니다.";
+        }
+        if (DATE_TIME_HINT.matcher(normalized).matches()) {
+            LocalDate today = LocalDate.now(KOREA_ZONE);
+            String dayOfWeek = today.getDayOfWeek().getDisplayName(TextStyle.FULL, Locale.KOREAN);
+            return "오늘은 %d년 %d월 %d일 %s입니다. 특정 날짜의 처리 작업이 궁금하면 \"5월 8일에 할 일 뭐야?\"처럼 물어보세요."
+                    .formatted(today.getYear(), today.getMonthValue(), today.getDayOfMonth(), dayOfWeek);
+        }
+        if (normalized.contains("로또") || normalized.contains("복권")) {
+            return "로또 번호 추천은 지원하지 않습니다. 대신 재고 위치, 미처리 작업, 부족 재고처럼 WMS 업무와 관련된 질문을 도와드릴 수 있습니다.";
+        }
+        if (normalized.contains("점심") || normalized.contains("메뉴 추천") || normalized.contains("저녁 추천") || normalized.contains("맛집")) {
+            return "식사 메뉴 추천은 지원 범위 밖입니다. WMS 업무 중 재고, 입고, 출고, 피킹, 작업 상태가 궁금하면 바로 물어보세요.";
+        }
+        if (normalized.contains("휴무") || normalized.contains("휴가") || normalized.contains("연차") || normalized.contains("근태")) {
+            return "휴무나 근태 일정은 현재 WMS 챗봇 조회 범위에 포함되어 있지 않습니다. 사내 근태 시스템이나 담당 관리자에게 확인해 주세요.";
+        }
+        if (normalized.contains("맞춤법") || normalized.contains("띄어쓰기") || normalized.contains("문법 검사")) {
+            return "맞춤법 검사는 현재 WMS 업무 챗봇의 지원 범위가 아닙니다. 재고 위치, 지시서 상태, 작업 실패 원인 같은 WMS 업무 질문을 도와드릴 수 있습니다.";
         }
         if (isUserIdentityQuestion(normalized)) {
             String name = normalize(userName);
