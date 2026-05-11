@@ -73,7 +73,7 @@ wms:
     search:
       top-k: ${RAG_SEARCH_TOP_K:8}
       similarity-threshold: ${RAG_SEARCH_SIMILARITY_THRESHOLD:0.35}
-      min-answer-similarity: ${RAG_MIN_ANSWER_SIMILARITY:0.45}
+      min-answer-similarity: ${RAG_MIN_ANSWER_SIMILARITY:0.40}
   readonly-datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     jdbc-url: ${WMS_READONLY_DB_URL}

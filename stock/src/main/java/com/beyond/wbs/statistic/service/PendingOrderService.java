@@ -170,6 +170,7 @@ public class PendingOrderService {
                     .itemCount((int) s[0])
                     .totalQty((int) s[1])
                     .createdAt(io.getCreatedAt())
+                    .assignedTo(io.getAssignedTo())
                     .build());
         }
 
@@ -192,6 +193,7 @@ public class PendingOrderService {
                     .itemCount((int) s[0])
                     .totalQty((int) s[1])
                     .createdAt(oo.getCreatedAt())
+                    .assignedTo(oo.getAssignedTo())
                     .build());
         }
 
@@ -214,6 +216,7 @@ public class PendingOrderService {
                     .itemCount((int) s[0])
                     .totalQty((int) s[1])
                     .createdAt(t.getCreatedAt())
+                    .assignedTo(t.getAssignedTo())
                     .build());
         }
         return result;
