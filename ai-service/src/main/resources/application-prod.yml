@@ -70,6 +70,10 @@ wms:
     auto-ingest:
       enabled: ${RAG_AUTO_INGEST_ENABLED:true}
       location: ${RAG_AUTO_INGEST_LOCATION:classpath:/knowledge/*.txt}
+    search:
+      top-k: ${RAG_SEARCH_TOP_K:8}
+      similarity-threshold: ${RAG_SEARCH_SIMILARITY_THRESHOLD:0.35}
+      min-answer-similarity: ${RAG_MIN_ANSWER_SIMILARITY:0.45}
   readonly-datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
     jdbc-url: ${WMS_READONLY_DB_URL}

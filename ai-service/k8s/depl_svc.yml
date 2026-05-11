@@ -40,6 +40,12 @@ spec:
           value: "true"
         - name: RAG_AUTO_INGEST_LOCATION
           value: classpath:/knowledge/*.txt
+        - name: RAG_SEARCH_TOP_K
+          value: "8"
+        - name: RAG_SEARCH_SIMILARITY_THRESHOLD
+          value: "0.35"
+        - name: RAG_MIN_ANSWER_SIMILARITY
+          value: "0.45"
         - name: OPENAI_API_KEY
           valueFrom:
             secretKeyRef:

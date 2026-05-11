@@ -20,6 +20,7 @@ import com.beyond.wbs.kafka.event.OutboundStockEvent;
 import com.beyond.wbs.document.instruction.domain.InstructionDocumentType;
 import com.beyond.wbs.document.instruction.event.InstructionIssueRequested;
 import com.beyond.wbs.websocket.WorkEventMessage;
+import com.beyond.wbs.websocket.WorkerAssignmentRefreshPublisher;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
@@ -65,6 +66,7 @@ public class OutboundService {
     private final InboundOrderRepository inboundOrderRepository;
     private final InboundOrderItemRepository inboundOrderItemRepository;
     private final WorkAssignmentService workAssignmentService;
+    private final WorkerAssignmentRefreshPublisher workerAssignmentRefreshPublisher;
 
     @Autowired
     public OutboundService(OutboundOrderRepository outboundOrderRepository,
@@ -86,7 +88,8 @@ public class OutboundService {
                            WebSocketPublisher webSocketPublisher,
                            InboundOrderRepository inboundOrderRepository,
                            InboundOrderItemRepository inboundOrderItemRepository,
-                           WorkAssignmentService workAssignmentService) {
+                           WorkAssignmentService workAssignmentService,
+                           WorkerAssignmentRefreshPublisher workerAssignmentRefreshPublisher) {
         this.outboundOrderRepository = outboundOrderRepository;
         this.erpSalesOrdersRepository = erpSalesOrdersRepository;
         this.erpSalesOrderItemRepository = erpSalesOrderItemRepository;
@@ -107,6 +110,7 @@ public class OutboundService {
         this.inboundOrderRepository = inboundOrderRepository;
         this.inboundOrderItemRepository = inboundOrderItemRepository;
         this.workAssignmentService = workAssignmentService;
+        this.workerAssignmentRefreshPublisher = workerAssignmentRefreshPublisher;
     }
 
     // ============================================================
@@ -613,7 +617,8 @@ public class OutboundService {
                             + String.join("\n - ", shortageMessages));
         }
 
-        UUID assignedTo = workAssignmentService.assign(WorkTaskType.OUTBOUND_DISPATCH, clientId, userId);
+        UUID assignedTo = workAssignmentService.assign(
+                WorkTaskType.OUTBOUND_DISPATCH, clientId, userId, outboundOrders.getWarehouseId(), null);
         outboundOrders.approve(userId, assignedTo);
         outboundOrderRepository.save(outboundOrders);
 
@@ -659,6 +664,12 @@ public class OutboundService {
                 .build();
         webSocketPublisher.send("/topic/admin/outbound/" + clientId, approvedMsg);
         webSocketPublisher.send("/topic/admin/outbound/" + clientId + "/" + outboundOrders.getId(), approvedMsg);
+        workerAssignmentRefreshPublisher.publishRefresh(
+                "outbound",
+                clientId,
+                assignedTo,
+                outboundOrders.getId(),
+                outboundOrders.getOrderNo());
     }
 
     // 출고지시서 취소

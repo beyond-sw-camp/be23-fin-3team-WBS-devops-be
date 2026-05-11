@@ -14,6 +14,7 @@ import com.beyond.wbs.inventory.dtos.*;
 import com.beyond.wbs.inventory.repository.*;
 import com.beyond.wbs.websocket.WebSocketPublisher;
 import com.beyond.wbs.websocket.WorkEventMessage;
+import com.beyond.wbs.websocket.WorkerAssignmentRefreshPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -49,6 +50,7 @@ public class StockCountService {
     private final WebSocketPublisher webSocketPublisher;
     private final MasterServiceClient masterServiceClient;
     private final WorkAssignmentService workAssignmentService;
+    private final WorkerAssignmentRefreshPublisher workerAssignmentRefreshPublisher;
 
     // WS 알림: 모듈 공통 형식 (clientId 기반 multi-tenant 분리)
     private void notifyStockCount(String type, StockCountOrder order, UUID actorId) {
@@ -183,7 +185,8 @@ public class StockCountService {
             throw new IllegalStateException("초안 상태에서만 실사를 시작할 수 있습니다.");
         }
 
-        UUID assignedTo = workAssignmentService.assign(WorkTaskType.STOCK_COUNT, clientId, userId);
+        UUID assignedTo = workAssignmentService.assign(
+                WorkTaskType.STOCK_COUNT, clientId, userId, order.getWarehouseId(), null);
         order.start(userId, assignedTo);
         countOrderRepository.save(order);
 
@@ -208,6 +211,12 @@ public class StockCountService {
                 .build();
         webSocketPublisher.send("/topic/admin/stock-count/" + clientId, startedMsg);
         webSocketPublisher.send("/topic/admin/stock-count/" + clientId + "/" + order.getId(), startedMsg);
+        workerAssignmentRefreshPublisher.publishRefresh(
+                "stock-count",
+                clientId,
+                assignedTo,
+                order.getId(),
+                order.getOrderNo());
     }
 
     /**
@@ -231,6 +240,7 @@ public class StockCountService {
 
         item.count(dto.getCountQty(), dto.getNote(), userId);
         countItemRepository.save(item);
+        workAssignmentService.recordLastLocation(clientId, userId, order.getWarehouseId(), item.getLocationId());
 
         // 같은 회사 관리자에게 품목 실사 알림 push (상세만 — 진행률 갱신용)
         webSocketPublisher.send("/topic/admin/stock-count/" + clientId + "/" + orderId,
@@ -451,6 +461,7 @@ public class StockCountService {
                 .status(order.getStatus())
                 .createdBy(order.getCreatedBy())
                 .approvedBy(order.getApprovedBy())
+                .assignedTo(order.getAssignedTo())
                 .note(order.getNote())
                 .createdAt(order.getCreatedAt())
                 .approvedAt(order.getApprovedAt())

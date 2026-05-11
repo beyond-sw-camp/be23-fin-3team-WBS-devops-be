@@ -13,6 +13,7 @@ import com.beyond.wbs.code.NumberingUtil;
 import com.beyond.wbs.document.instruction.domain.InstructionDocumentType;
 import com.beyond.wbs.document.instruction.event.InstructionIssueRequested;
 import com.beyond.wbs.websocket.WorkEventMessage;
+import com.beyond.wbs.websocket.WorkerAssignmentRefreshPublisher;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
@@ -47,6 +48,7 @@ public class PickingListService {
     private final WebSocketPublisher webSocketPublisher;
     private final ApplicationEventPublisher applicationEventPublisher;
     private final PickingAssignmentService pickingAssignmentService;
+    private final WorkerAssignmentRefreshPublisher workerAssignmentRefreshPublisher;
 
     @Autowired
     public PickingListService(OutboundOrderRepository outboundOrderRepository,
@@ -60,7 +62,8 @@ public class PickingListService {
                               AccountServiceClient accountServiceClient,
                               WebSocketPublisher webSocketPublisher,
                               ApplicationEventPublisher applicationEventPublisher,
-                              PickingAssignmentService pickingAssignmentService) {
+                              PickingAssignmentService pickingAssignmentService,
+                              WorkerAssignmentRefreshPublisher workerAssignmentRefreshPublisher) {
         this.outboundOrderRepository = outboundOrderRepository;
         this.outboundOrderItemRepository = outboundOrderItemRepository;
         this.pickinglistRepository = pickinglistRepository;
@@ -73,6 +76,7 @@ public class PickingListService {
         this.webSocketPublisher = webSocketPublisher;
         this.applicationEventPublisher = applicationEventPublisher;
         this.pickingAssignmentService = pickingAssignmentService;
+        this.workerAssignmentRefreshPublisher = workerAssignmentRefreshPublisher;
     }
 
     // ============================================================
@@ -274,6 +278,12 @@ public class PickingListService {
                                 .userId(userId)
                                 .occurredAt(LocalDateTime.now())
                                 .build());
+                workerAssignmentRefreshPublisher.publishRefresh(
+                        "picking",
+                        clientId,
+                        pl.getAssignedTo(),
+                        pl.getId(),
+                        pl.getPickingNo());
             }
         }
 

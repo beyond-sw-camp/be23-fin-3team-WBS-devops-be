@@ -19,6 +19,7 @@ public class StockCountResDto {
     private StockCountStatus status;
     private UUID createdBy;
     private UUID approvedBy;
+    private UUID assignedTo;
     private String note;
     private LocalDateTime createdAt;
     private LocalDateTime approvedAt;
@@ -33,6 +34,7 @@ public class StockCountResDto {
                 .status(order.getStatus())
                 .createdBy(order.getCreatedBy())
                 .approvedBy(order.getApprovedBy())
+                .assignedTo(order.getAssignedTo())
                 .note(order.getNote())
                 .createdAt(order.getCreatedAt())
                 .approvedAt(order.getApprovedAt())

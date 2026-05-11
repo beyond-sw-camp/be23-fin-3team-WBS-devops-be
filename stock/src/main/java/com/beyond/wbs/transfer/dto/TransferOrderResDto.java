@@ -25,6 +25,7 @@ public class TransferOrderResDto {
     private String note;
     private UUID createdBy;
     private UUID approvedBy;
+    private UUID assignedTo;
     private String approvedAt;
     private String createdAt;
     private Integer totalItems;
@@ -49,6 +50,7 @@ public class TransferOrderResDto {
                 .note(order.getNote())
                 .createdBy(order.getCreatedBy())
                 .approvedBy(order.getApprovedBy())
+                .assignedTo(order.getAssignedTo())
                 .approvedAt(order.getApprovedAt() != null ? order.getApprovedAt().toString() : null)
                 .createdAt(order.getCreatedAt().toLocalDate().toString())
                 .totalItems(totalItems)

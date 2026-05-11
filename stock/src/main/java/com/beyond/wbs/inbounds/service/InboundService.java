@@ -29,6 +29,7 @@ import com.beyond.wbs.outbounds.repository.OutboundOrderItemRepository;
 import com.beyond.wbs.outbounds.repository.OutboundOrderRepository;
 import com.beyond.wbs.search.inbound.InboundOrderSearchService;
 import com.beyond.wbs.websocket.WorkEventMessage;
+import com.beyond.wbs.websocket.WorkerAssignmentRefreshPublisher;
 import com.beyond.wbs.document.instruction.domain.InstructionDocumentType;
 import com.beyond.wbs.document.instruction.event.InstructionIssueRequested;
 import lombok.extern.slf4j.Slf4j;
@@ -79,6 +80,7 @@ public class InboundService {
     private final WebSocketPublisher webSocketPublisher;
     private final ApplicationEventPublisher applicationEventPublisher;
     private final WorkAssignmentService workAssignmentService;
+    private final WorkerAssignmentRefreshPublisher workerAssignmentRefreshPublisher;
 
     public InboundService(ErpPurchaseOrderRepository erpPurchaseOrderRepository,
                           ErpPurchaseOrderItemRepository erpPurchaseOrderItemRepository,
@@ -100,7 +102,8 @@ public class InboundService {
                           PlacementSuggestionService placementSuggestionService,
                           ApplicationEventPublisher applicationEventPublisher,
                           WebSocketPublisher webSocketPublisher,
-                          WorkAssignmentService workAssignmentService) {
+                          WorkAssignmentService workAssignmentService,
+                          WorkerAssignmentRefreshPublisher workerAssignmentRefreshPublisher) {
         this.erpPurchaseOrderRepository = erpPurchaseOrderRepository;
         this.erpPurchaseOrderItemRepository = erpPurchaseOrderItemRepository;
         this.inboundOrderRepository = inboundOrderRepository;
@@ -122,6 +125,7 @@ public class InboundService {
         this.applicationEventPublisher = applicationEventPublisher;
         this.webSocketPublisher = webSocketPublisher;
         this.workAssignmentService = workAssignmentService;
+        this.workerAssignmentRefreshPublisher = workerAssignmentRefreshPublisher;
     }
 
     /**
@@ -1432,7 +1436,8 @@ public class InboundService {
         }
 
         // 4. 승인 처리
-        UUID assignedTo = workAssignmentService.assign(WorkTaskType.INBOUND_INSPECTION, clientId, userId);
+        UUID assignedTo = workAssignmentService.assign(
+                WorkTaskType.INBOUND_INSPECTION, clientId, userId, order.getWarehouseId(), null);
         order.approve(userId, assignedTo);
 
         // 5. Elasticsearch 색인 갱신
@@ -1471,6 +1476,7 @@ public class InboundService {
                 .build();
         webSocketPublisher.send("/topic/admin/inbound/" + clientId, approvedMsg);
         webSocketPublisher.send("/topic/admin/inbound/" + clientId + "/" + orderId, approvedMsg);
+        workerAssignmentRefreshPublisher.publishRefresh("inbound", clientId, assignedTo, orderId, order.getOrderNo());
 
         // 입고지시서 PDF 발행 요청
         applicationEventPublisher.publishEvent(new InstructionIssueRequested(
@@ -1645,6 +1651,7 @@ public class InboundService {
         // DB 에는 아직 반영 전이라 DB 스냅샷만 보는 검증으로는 막을 수 없다.
         Map<UUID, UUID> batchLocOwner = new HashMap<>();      // locationId → 최초 점유 productId
         Map<UUID, Integer> batchLocRemain = new HashMap<>();  // locationId → 남은 배정 가능 용량
+        UUID placementAssignedTo = null;
 
         for (ReceiveRowDto row : dto.getRows()) {
             InboundOrderItems orderItem = inboundOrderItemRepository.findById(row.getItemId())
@@ -1658,7 +1665,11 @@ public class InboundService {
                 if (placementOrder == null) {
                     placementOrder = PlacementOrders.create(
                             orderId, clientId, order.getWarehouseId(), numberingUtil.generatePlacementNo());
-                    placementOrder.setAssignedTo(userId);
+                    if (placementAssignedTo == null) {
+                        placementAssignedTo = workAssignmentService.assign(
+                                WorkTaskType.PLACEMENT, clientId, userId, order.getWarehouseId(), null);
+                    }
+                    placementOrder.setAssignedTo(placementAssignedTo);
                     placementOrderRepository.save(placementOrder);
                 }
                 List<SuggestLocationResDto> suggestions = placementSuggestionService.suggest(
@@ -1699,7 +1710,11 @@ public class InboundService {
                 if (placementOrder == null) {
                     placementOrder = PlacementOrders.create(
                             orderId, clientId, order.getWarehouseId(), numberingUtil.generatePlacementNo());
-                    placementOrder.setAssignedTo(userId);
+                    if (placementAssignedTo == null) {
+                        placementAssignedTo = workAssignmentService.assign(
+                                WorkTaskType.PLACEMENT, clientId, userId, order.getWarehouseId(), null);
+                    }
+                    placementOrder.setAssignedTo(placementAssignedTo);
                     placementOrderRepository.save(placementOrder);
                 }
                 List<SuggestLocationResDto> defectSuggestions = placementSuggestionService.suggest(
@@ -1786,6 +1801,12 @@ public class InboundService {
                     clientId,
                     userId
             ));
+            workerAssignmentRefreshPublisher.publishRefresh(
+                    "placement",
+                    clientId,
+                    placementOrder.getAssignedTo(),
+                    placementOrder.getId(),
+                    placementOrder.getPlacementNo());
         }
 
         // 6. 응답 (allItems 는 위에서 이미 조회됨)
@@ -1862,6 +1883,7 @@ public class InboundService {
                         item, seq++, zoneName, rackId, rackCode, locationCode,
                         orderId, order.getWarehouseId(), order.getOrderNo(), po.getPlacementNo(),
                         products.get(item.getProductId()));
+                dto.setAssignedTo(po.getAssignedTo());
                 dto.setUnassignedReason(diagnoseUnassignedReason(item, po, products.get(item.getProductId()), clientId));
                 itemDtos.add(dto);
             }
@@ -1918,6 +1940,7 @@ public class InboundService {
                     inboundOrder.getId(), inboundOrder.getWarehouseId(),
                     inboundOrder.getOrderNo(), placementOrder.getPlacementNo(),
                     products.get(item.getProductId()));
+            dto.setAssignedTo(placementOrder.getAssignedTo());
             result.add(dto);
         }
         return result;
@@ -2013,6 +2036,7 @@ public class InboundService {
                     item, seq++, zoneName, rackId, rackCode, locationCode,
                     order.getId(), order.getWarehouseId(), order.getOrderNo(), po.getPlacementNo(),
                     products.get(item.getProductId()));
+            dto.setAssignedTo(po.getAssignedTo());
             dto.setUnassignedReason(diagnoseUnassignedReason(item, po, products.get(item.getProductId()), clientId));
             itemDtos.add(dto);
         }
@@ -2074,6 +2098,7 @@ public class InboundService {
                     item, seq++, zoneName, rackId, rackCode, locationCode,
                     orderId, po != null ? po.getWarehouseId() : null, orderNo, placementNo,
                     products.get(item.getProductId()));
+            dto.setAssignedTo(po != null ? po.getAssignedTo() : null);
             dto.setUnassignedReason(diagnoseUnassignedReason(item, po, products.get(item.getProductId()), clientId));
             result.add(dto);
         }
@@ -2444,6 +2469,7 @@ public class InboundService {
         // 3. 적치 완료 처리 + 불량 수량 기록
         item.setDefectQty(defect);
         item.completePlacement(userId);
+        workAssignmentService.recordLastLocation(clientId, userId, po.getWarehouseId(), item.getLocationId());
 
         // 3-1. 적치 중 불량 발견 시 — 같은 적치 지시서에 DEFECT 존 추가 PlacementItems 자동 생성
         //   검수 불량과 동일한 패턴: DEFECT 존 위치 자동 추천 → 작업자가 완료하면 relocateDefect
