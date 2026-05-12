@@ -689,10 +689,12 @@ public class WorkQueryService {
                 재고 위치 답변 원칙:
                 - INVENTORY_LOCATION이면 상품명, 창고명, 로케이션 또는 위치를 먼저 말하고 가용 재고를 이어서 말한다.
                 - 같은 상품이 여러 행이면 available_qty가 0보다 큰 행을 우선 답한다.
-                - available_qty가 0인 위치는 "가용 재고가 있는 위치"로 말하지 않는다.
-                - 다른 위치에 available_qty가 0보다 큰 행이 없으면 "다른 위치에는 재고가 없습니다."로 끝낸다.
-                - 다른 위치에 available_qty가 0보다 큰 행이 있으면 "다른 위치에도 재고가 있습니다."까지만 말하고 임의 조치를 붙이지 않는다.
-                - location_code가 "-"이면 rack_code, zone_name, zone_code 순서로 사용하고 모두 없으면 "위치 미지정"이라고 말한다.
+                - available_qty가 0인 행은 "가용 재고가 있는 위치" 또는 "다른 위치 재고"로 절대 말하지 않는다.
+                - total_qty가 있어도 available_qty가 0이면 사용자가 찾는 가용 재고 위치가 아니다.
+                - location_code가 "-"이거나 "위치 미지정"이면 실제 위치로 말하지 않는다. rack_code, zone_name, zone_code도 모두 없을 때만 "위치 미지정"이라고 말한다.
+                - 사용자가 "다른 위치", "또 다른 위치"를 물으면 최근 대화에서 이미 답한 위치를 제외하고 available_qty가 0보다 크며 실제 위치가 있는 행만 답한다.
+                - 위 조건을 만족하는 다른 행이 없으면 "다른 위치에는 재고가 없습니다."라고만 답한다.
+                - 위 조건을 만족하는 다른 행이 있으면 그 위치와 가용 재고만 답하고 임의 조치를 붙이지 않는다.
                 상태 해석:
                 - approved는 완료가 아니라 승인 완료 후 처리 대기 상태다.
                 - pending/draft는 대기, in_progress/picking/placing은 진행 중, completed/received는 완료다.
