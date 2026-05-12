@@ -46,4 +46,7 @@ public class PickingListDetailResDto {
     // 피킹 품목 목록
     private List<PickingListItemResDto> items;
 
+    // 이 피킹리스트에 엮인 출고지시서 ID 목록 (count + 링크용)
+    private List<UUID> outboundOrderIds;
+
 }
