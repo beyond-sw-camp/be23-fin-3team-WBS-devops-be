@@ -80,9 +80,9 @@ public class AiWorkQueryService {
     }
 
     private List<Map<String, Object>> queryInventoryLocation(String clientId, String product, String warehouse, int limit) {
-        String like = "%" + (isBlank(product) ? "" : product) + "%";
         String warehouseLike = "%" + (isBlank(warehouse) ? "" : warehouse) + "%";
-        return jdbcTemplate.queryForList("""
+        List<String> productTokens = productSearchTokens(product);
+        StringBuilder sql = new StringBuilder("""
                 SELECT p.name AS product_name,
                        p.sku,
                        w.name AS warehouse_name,
@@ -101,12 +101,52 @@ public class AiWorkQueryService {
                 LEFT JOIN master_db.racks r ON r.id = l.rack_id
                 LEFT JOIN master_db.zones z ON z.id = r.zone_id
                 WHERE (? IS NULL OR i.client_id = UNHEX(REPLACE(?, '-', '')))
-                  AND (p.name LIKE ? OR p.sku LIKE ?)
                   AND (? = '%%' OR w.name LIKE ?)
                   AND i.total_qty > 0
-                ORDER BY p.name ASC, w.name ASC, z.code ASC, r.code ASC, l.code ASC
+                """);
+        List<Object> params = new ArrayList<>();
+        params.add(blankToNull(clientId));
+        params.add(blankToNull(clientId));
+        params.add(warehouseLike);
+        params.add(warehouseLike);
+
+        for (String token : productTokens) {
+            sql.append("""
+                      AND (
+                            LOWER(p.name) LIKE ?
+                         OR LOWER(p.sku) LIKE ?
+                         OR LOWER(COALESCE(p.barcode, '')) LIKE ?
+                         OR LOWER(COALESCE(p.name_en, '')) LIKE ?
+                      )
+                    """);
+            String tokenLike = "%" + token + "%";
+            params.add(tokenLike);
+            params.add(tokenLike);
+            params.add(tokenLike);
+            params.add(tokenLike);
+        }
+
+        sql.append("""
+                ORDER BY
+                    CASE
+                        WHEN LOWER(p.sku) = ? THEN 0
+                        WHEN LOWER(p.name) = ? THEN 1
+                        WHEN LOWER(p.sku) LIKE ? THEN 2
+                        WHEN LOWER(p.name) LIKE ? THEN 3
+                        ELSE 4
+                    END,
+                    p.name ASC, w.name ASC, z.code ASC, r.code ASC, l.code ASC
                 LIMIT ?
-                """, blankToNull(clientId), blankToNull(clientId), like, like, warehouseLike, warehouseLike, limit);
+                """);
+        String normalizedProduct = normalizeSearchText(product);
+        String productLike = "%" + normalizedProduct + "%";
+        params.add(normalizedProduct);
+        params.add(normalizedProduct);
+        params.add(productLike);
+        params.add(productLike);
+        params.add(limit);
+
+        return jdbcTemplate.queryForList(sql.toString(), params.toArray());
     }
 
     private List<Map<String, Object>> queryLowStock(String clientId, int limit) {
@@ -360,6 +400,39 @@ public class AiWorkQueryService {
 
     private String blankToNull(String value) {
         return isBlank(value) ? null : value;
+    }
+
+    private List<String> productSearchTokens(String value) {
+        String normalized = normalizeSearchText(value);
+        if (normalized.isBlank()) {
+            return List.of();
+        }
+        Set<String> stopwords = Set.of(
+                "어디", "어디에", "어딨어", "어딨", "있어", "있나", "위치", "재고", "수량", "알려줘", "보여줘"
+        );
+        List<String> tokens = new ArrayList<>();
+        for (String token : normalized.split("\\s+")) {
+            String cleaned = token.strip();
+            if (cleaned.length() < 2 || stopwords.contains(cleaned)) {
+                continue;
+            }
+            tokens.add(cleaned);
+            if (tokens.size() >= 5) {
+                break;
+            }
+        }
+        return tokens;
+    }
+
+    private String normalizeSearchText(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.toLowerCase(Locale.ROOT)
+                .replaceAll("[_\\-/]", " ")
+                .replaceAll("[^0-9a-z가-힣\\s]", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
     }
 
     private LocalDate normalizeDate(String value) {
