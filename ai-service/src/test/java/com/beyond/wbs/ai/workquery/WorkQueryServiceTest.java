@@ -89,5 +89,8 @@ class WorkQueryServiceTest {
         assertTrue(promptCaptor.getValue().contains("100개가 가용합니다"));
         assertTrue(promptCaptor.getValue().contains("필요한 작업을 진행해야 합니다"));
         assertTrue(promptCaptor.getValue().contains("다른 위치에는 재고가 없습니다."));
+        assertTrue(promptCaptor.getValue().contains("available_qty가 0인 행은"));
+        assertTrue(promptCaptor.getValue().contains("위치 미지정"));
+        assertTrue(promptCaptor.getValue().contains("최근 대화에서 이미 답한 위치를 제외"));
     }
 }
