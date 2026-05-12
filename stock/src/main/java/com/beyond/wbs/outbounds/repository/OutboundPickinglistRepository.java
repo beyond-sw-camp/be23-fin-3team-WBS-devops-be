@@ -13,4 +13,7 @@ public interface OutboundPickinglistRepository extends JpaRepository<OutboundPic
 
     // 특정 피킹리스트에 엮인 출고지시서 매핑 전체
     List<OutboundPickinglist> findByPickingListId(UUID pickingListId);
+
+    // 페이지 단위 N+1 회피용 — 여러 피킹리스트의 매핑을 한 번에 조회
+    List<OutboundPickinglist> findByPickingListIdIn(List<UUID> pickingListIds);
 }

@@ -415,6 +415,18 @@ public class PickingListService {
                 : pickinglistRepository.findByConditions(
                         clientId, warehouseId, status, assignedTo, pageable);
 
+        // 페이지 내 피킹리스트들에 엮인 출고지시서 매핑을 한 번에 조회 (N+1 방지)
+        List<UUID> pageIds = pickingLists.getContent().stream()
+                .map(PickingList::getId)
+                .collect(Collectors.toList());
+        Map<UUID, List<UUID>> outboundIdsByPicking = pageIds.isEmpty()
+                ? new HashMap<>()
+                : outboundPickinglistRepository.findByPickingListIdIn(pageIds).stream()
+                        .collect(Collectors.groupingBy(
+                                OutboundPickinglist::getPickingListId,
+                                Collectors.mapping(OutboundPickinglist::getOutboundOrderId,
+                                        Collectors.toList())));
+
         // 같은 창고/담당자/생성자가 반복되므로 Feign 결과 캐싱 (N+1 방지)
         Map<UUID, String> warehouseNameCache = new HashMap<>();
         Map<UUID, String> userNameCache = new HashMap<>();
@@ -427,6 +439,10 @@ public class PickingListService {
             String createdByName = userNameCache.computeIfAbsent(
                     p1.getCreatedBy(), uid -> fetchUserName(uid, requesterId));
 
+            List<UUID> outboundOrderIds = outboundIdsByPicking
+                    .getOrDefault(p1.getId(), List.of())
+                    .stream().distinct().collect(Collectors.toList());
+
             return PickingListResDto.builder()
                     .id(p1.getId())
                     .pickingNo(p1.getPickingNo())
@@ -438,6 +454,7 @@ public class PickingListService {
                     .startedAt(p1.getStartedAt())
                     .completedAt(p1.getCompletedAt())
                     .createdAt(p1.getCreatedAt())
+                    .outboundOrderIds(outboundOrderIds)
                     .build();
         });
     }

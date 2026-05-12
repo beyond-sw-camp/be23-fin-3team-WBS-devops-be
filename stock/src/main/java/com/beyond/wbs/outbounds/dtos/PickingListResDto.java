@@ -4,6 +4,7 @@ import com.beyond.wbs.outbounds.domain.PickingListStatus;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 @AllArgsConstructor
@@ -41,5 +42,8 @@ public class PickingListResDto {
 
     // 생성일시
     private LocalDateTime createdAt;
+
+    // 이 피킹리스트에 엮인 출고지시서 ID 목록 (count + 링크용)
+    private List<UUID> outboundOrderIds;
 }
 
