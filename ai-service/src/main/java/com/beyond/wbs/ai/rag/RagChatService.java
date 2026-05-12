@@ -30,7 +30,7 @@ public class RagChatService {
     @Value("${wms.rag.search.similarity-threshold:0.35}")
     private double searchSimilarityThreshold;
 
-    @Value("${wms.rag.search.min-answer-similarity:0.45}")
+    @Value("${wms.rag.search.min-answer-similarity:0.38}")
     private double minAnswerSimilarity;
 
     private static final String NO_EVIDENCE_ANSWER = "죄송합니다. 요청하신 질문을 처리할 수 없습니다.";
@@ -56,8 +56,9 @@ public class RagChatService {
 
     public String ask(String question, String category, List<ChatTurn> history) {
         long startedAt = System.nanoTime();
-        String retrievalQuestion = rewriteQuestion(question, history);
-        String effectiveCategory = resolveCategory(category, retrievalQuestion);
+        String rewrittenQuestion = rewriteQuestion(question, history);
+        String effectiveCategory = resolveCategory(category, rewrittenQuestion);
+        String retrievalQuestion = enrichRetrievalQuestion(rewrittenQuestion, effectiveCategory);
         log.info("[AI_RAG_START] category={}, requestedCategory={}, originalQuestion='{}', retrievalQuestion='{}'",
                 effectiveCategory, normalizeCategory(category), sanitize(question), sanitize(retrievalQuestion));
         String cacheSource = effectiveCategory;
@@ -93,8 +94,9 @@ public class RagChatService {
 
     public String retrieveContext(String question, String category, List<ChatTurn> history) {
         long startedAt = System.nanoTime();
-        String retrievalQuestion = rewriteQuestion(question, history == null ? List.of() : history);
-        String effectiveCategory = resolveCategory(category, retrievalQuestion);
+        String rewrittenQuestion = rewriteQuestion(question, history == null ? List.of() : history);
+        String effectiveCategory = resolveCategory(category, rewrittenQuestion);
+        String retrievalQuestion = enrichRetrievalQuestion(rewrittenQuestion, effectiveCategory);
         RetrievalResult retrievalResult = retrieveDocuments(retrievalQuestion, effectiveCategory);
         List<Document> documents = hasEnoughEvidence(retrievalResult.documents()) ? retrievalResult.documents() : List.of();
         log.info("[AI_RAG_CONTEXT] category={}, docs={}, totalMs={}, question='{}'",
@@ -108,8 +110,9 @@ public class RagChatService {
 
     public Flux<String> askStream(String question, String category, List<ChatTurn> history) {
         long startedAt = System.nanoTime();
-        String retrievalQuestion = rewriteQuestion(question, history);
-        String effectiveCategory = resolveCategory(category, retrievalQuestion);
+        String rewrittenQuestion = rewriteQuestion(question, history);
+        String effectiveCategory = resolveCategory(category, rewrittenQuestion);
+        String retrievalQuestion = enrichRetrievalQuestion(rewrittenQuestion, effectiveCategory);
         log.info("[AI_RAG_STREAM_START] category={}, requestedCategory={}, originalQuestion='{}', retrievalQuestion='{}'",
                 effectiveCategory, normalizeCategory(category), sanitize(question), sanitize(retrievalQuestion));
         String cacheSource = effectiveCategory;
@@ -171,6 +174,44 @@ public class RagChatService {
         } catch (Exception e) {
             log.warn("rag question rewrite failed, fallback to original question: {}", e.getMessage());
             return question;
+        }
+    }
+
+    private String enrichRetrievalQuestion(String question, String category) {
+        String normalized = sanitize(question);
+        if (normalized.isBlank()) {
+            return normalized;
+        }
+        StringBuilder enriched = new StringBuilder(normalized);
+        appendIfMatched(enriched, normalized, "출고지시서", "출고 지시서",
+                "출고 지시서 화면 출고 관리 출고 지시서 생성 등록 만들기 메뉴 화면 경로");
+        appendIfMatched(enriched, normalized, "출고 지시서",
+                "출고 지시서 화면 출고 관리 출고 지시서 생성 등록 만들기 메뉴 화면 경로");
+        appendIfMatched(enriched, normalized, "입고지시서", "입고 지시서",
+                "입고 지시서 화면 입고 관리 입고 지시서 생성 등록 만들기 메뉴 화면 경로");
+        appendIfMatched(enriched, normalized, "입고 지시서",
+                "입고 지시서 화면 입고 관리 입고 지시서 생성 등록 만들기 메뉴 화면 경로");
+        appendIfMatched(enriched, normalized, "피킹리스트", "피킹 리스트",
+                "피킹 리스트 화면 지시서 목록 피킹 리스트 생성 메뉴 화면 경로");
+        appendIfMatched(enriched, normalized, "피킹 리스트",
+                "피킹 리스트 화면 지시서 목록 피킹 리스트 생성 메뉴 화면 경로");
+
+        if ("wms-ui-guide".equalsIgnoreCase(normalizeCategory(category))
+                && hasAny(normalized, "어디", "어디서", "어디에서", "메뉴", "화면", "경로", "만들", "생성", "등록")) {
+            enriched.append(" 화면 경로 메뉴 위치 생성 등록");
+        }
+        return enriched.toString();
+    }
+
+    private void appendIfMatched(StringBuilder builder, String question, String keyword, String phrase) {
+        if (question.contains(keyword) && !builder.toString().contains(phrase)) {
+            builder.append(' ').append(phrase);
+        }
+    }
+
+    private void appendIfMatched(StringBuilder builder, String question, String compactKeyword, String spacedKeyword, String phrase) {
+        if ((question.contains(compactKeyword) || question.contains(spacedKeyword)) && !builder.toString().contains(phrase)) {
+            builder.append(' ').append(phrase);
         }
     }
 
