@@ -550,6 +550,13 @@ public class PickingListService {
         String assignedToName = fetchUserName(pickingList.getAssignedTo(), requesterId);
         String createdByName = fetchUserName(pickingList.getCreatedBy(), requesterId);
 
+        // 이 피킹리스트에 엮인 출고지시서 ID 목록 (FE에서 count + 링크 둘 다 사용)
+        List<UUID> outboundOrderIds = outboundPickinglistRepository.findByPickingListId(id)
+                .stream()
+                .map(OutboundPickinglist::getOutboundOrderId)
+                .distinct()
+                .collect(Collectors.toList());
+
         return PickingListDetailResDto.builder()
                 .id(pickingList.getId())
                 .pickingNo(pickingList.getPickingNo())
@@ -562,6 +569,7 @@ public class PickingListService {
                 .completedAt(pickingList.getCompletedAt())
                 .createdAt(pickingList.getCreatedAt())
                 .items(itemDto)
+                .outboundOrderIds(outboundOrderIds)
                 .build();
     }
 
