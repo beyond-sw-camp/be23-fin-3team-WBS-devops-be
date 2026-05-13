@@ -323,6 +323,21 @@ class ChatRoutingServiceTest {
     }
 
     @Test
+    void routesWmsErrorCodeQuestionToRagWithoutDependingOnLlmClassification() {
+        when(ragChatService.ask(eq("INB-409 이게 뭐야?"), eq(null), anyList()))
+                .thenReturn("INB-409는 입고 검수 완료 불가 상태를 의미합니다.");
+
+        ChatRoutingService.RouteResult result = chatRoutingService.route(
+                "INB-409 이게 뭐야?", List.of(), null, "client-1", "user-1", "관리자");
+
+        assertEquals(ChatMode.RAG, result.mode());
+        assertEquals("error_code_manual_question", result.routeReason());
+        assertTrue(result.answer().contains("INB-409"));
+        verify(openAiChatGateway, never()).completeJson(anyString(), anyString());
+        verify(workQueryService, never()).askWithRoute(anyString(), anyList(), any(), anyString(), anyString(), any());
+    }
+
+    @Test
     void routesOperationalTroubleshootingQuestionsToRag() {
         List<String> questions = List.of(
                 "권한 없다고 뜨는데 왜 그래?",

@@ -12,8 +12,11 @@ import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
+import java.util.Locale;
 import java.util.List;
 import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Slf4j
 @Service
@@ -34,6 +37,10 @@ public class RagChatService {
     private double minAnswerSimilarity;
 
     private static final String NO_EVIDENCE_ANSWER = "죄송합니다. 요청하신 질문을 처리할 수 없습니다.";
+
+    private static final Pattern ERROR_CODE_PATTERN = Pattern.compile(
+            "(?i)\\b(AUTH|DOC|INB|OUT|PICK|ASSIGN|INV|CODE|MASTER|MENU|FILE)-\\d{3}\\b"
+    );
 
     private static final String SYSTEM_PROMPT = """
             Do NOT show your thinking or reasoning. Answer directly.
@@ -80,10 +87,17 @@ public class RagChatService {
         }
 
         long llmStartedAt = System.nanoTime();
-        String answer = openAiChatGateway.complete(
-                buildSystemPrompt(history),
-                buildRagUserPrompt(retrievalQuestion, documents)
-        );
+        String answer;
+        try {
+            answer = openAiChatGateway.complete(
+                    buildSystemPrompt(history),
+                    buildRagUserPrompt(retrievalQuestion, documents)
+            );
+        } catch (Exception e) {
+            log.warn("[AI_RAG_LLM_FAILED] reason={}, totalMs={}, question='{}'",
+                    e.getMessage(), elapsedMs(startedAt), sanitize(retrievalQuestion));
+            answer = evidenceFallbackAnswer(retrievalQuestion, documents);
+        }
         log.info("[AI_RAG_LLM_END] answerChars={}, llmMs={}, totalMs={}, question='{}'",
                 answer == null ? 0 : answer.length(), elapsedMs(llmStartedAt), elapsedMs(startedAt), sanitize(retrievalQuestion));
         if (!documents.isEmpty()) {
@@ -133,10 +147,17 @@ public class RagChatService {
             return Flux.just(NO_EVIDENCE_ANSWER);
         }
 
-        String answer = openAiChatGateway.complete(
-                buildSystemPrompt(history),
-                buildRagUserPrompt(retrievalQuestion, documents)
-        );
+        String answer;
+        try {
+            answer = openAiChatGateway.complete(
+                    buildSystemPrompt(history),
+                    buildRagUserPrompt(retrievalQuestion, documents)
+            );
+        } catch (Exception e) {
+            log.warn("[AI_RAG_LLM_FAILED] stream=true, reason={}, totalMs={}, question='{}'",
+                    e.getMessage(), elapsedMs(startedAt), sanitize(retrievalQuestion));
+            answer = evidenceFallbackAnswer(retrievalQuestion, documents);
+        }
         log.info("[AI_RAG_LLM_END] stream=true, answerChars={}, totalMs={}, question='{}'",
                 answer == null ? 0 : answer.length(), elapsedMs(startedAt), sanitize(retrievalQuestion));
         if (!documents.isEmpty()) {
@@ -195,6 +216,12 @@ public class RagChatService {
                 "피킹 리스트 화면 지시서 목록 피킹 리스트 생성 메뉴 화면 경로");
         appendIfMatched(enriched, normalized, "피킹 리스트",
                 "피킹 리스트 화면 지시서 목록 피킹 리스트 생성 메뉴 화면 경로");
+        if (containsErrorCode(normalized)) {
+            enriched.append(" WMS 오류 코드 기준 조치 가이드 실패 원인 확인 감사 로그");
+        }
+        if (hasAny(normalized, "권한", "역할", "role", "permission", "관리자", "매니저", "오퍼레이터", "operator")) {
+            enriched.append(" WMS 권한 역할 정책 ADMIN MANAGER OPERATOR 리소스 액션 권한 캐시");
+        }
 
         if ("wms-ui-guide".equalsIgnoreCase(normalizeCategory(category))
                 && hasAny(normalized, "어디", "어디서", "어디에서", "메뉴", "화면", "경로", "만들", "생성", "등록")) {
@@ -282,6 +309,12 @@ public class RagChatService {
         }
 
         String q = sanitize(question);
+        if (containsErrorCode(q)) {
+            return "wms-ui-guide";
+        }
+        if (hasAny(q, "권한", "역할", "role", "permission", "관리자", "매니저", "오퍼레이터", "operator")) {
+            return "wms-role-permission-policy";
+        }
         if (hasAny(q, "불량사진", "불량 사진", "불량 증빙", "증빙 사진", "증빙 파일", "첨부", "파일",
                 "화면", "어디서", "어디에서", "메뉴", "경로", "조회 화면", "리스트", "지시서 화면")) {
             return "wms-ui-guide";
@@ -336,6 +369,73 @@ public class RagChatService {
                 .max(Double::compareTo)
                 .map(score -> score >= minAnswerSimilarity)
                 .orElse(true);
+    }
+
+    private String evidenceFallbackAnswer(String question, List<Document> documents) {
+        String code = extractErrorCode(question);
+        if (!code.isBlank()) {
+            return documents.stream()
+                    .map(Document::getText)
+                    .map(text -> errorCodeAnswerFromText(code, text))
+                    .filter(answer -> !answer.isBlank())
+                    .findFirst()
+                    .orElse(NO_EVIDENCE_ANSWER);
+        }
+        return NO_EVIDENCE_ANSWER;
+    }
+
+    private String errorCodeAnswerFromText(String code, String text) {
+        if (text == null || text.isBlank()) {
+            return "";
+        }
+        String upperCode = code.toUpperCase(Locale.ROOT);
+        for (String line : text.split("\\R")) {
+            String normalizedLine = sanitize(line);
+            if (normalizedLine.toUpperCase(Locale.ROOT).contains(upperCode)) {
+                return formatErrorCodeLine(upperCode, normalizedLine);
+            }
+        }
+        return "";
+    }
+
+    private String formatErrorCodeLine(String code, String line) {
+        String cleaned = line.replaceFirst("^[-*]\\s*", "").trim();
+        int colonIndex = cleaned.indexOf(':');
+        if (colonIndex < 0 || colonIndex >= cleaned.length() - 1) {
+            return cleaned;
+        }
+        String body = cleaned.substring(colonIndex + 1).trim();
+        String[] parts = body.split("\\.\\s*", 2);
+        String meaning = parts[0].trim();
+        if (parts.length == 1 || parts[1].isBlank()) {
+            return code + "는 " + meaning + " 상태를 의미합니다.";
+        }
+        return code + "는 " + meaning + " 상태를 의미합니다. " + toPoliteSentence(parts[1]);
+    }
+
+    private String toPoliteSentence(String value) {
+        String sentence = value.trim();
+        if (!sentence.endsWith(".") && !sentence.endsWith("!") && !sentence.endsWith("?")) {
+            sentence += ".";
+        }
+        return sentence
+                .replace("확인한다.", "확인하세요.")
+                .replace("확인해야 한다.", "확인하세요.")
+                .replace("처리한다.", "처리하세요.")
+                .replace("발생한다.", "발생합니다.")
+                .replace("분류한다.", "분류합니다.");
+    }
+
+    private boolean containsErrorCode(String value) {
+        return ERROR_CODE_PATTERN.matcher(value == null ? "" : value).find();
+    }
+
+    private String extractErrorCode(String value) {
+        Matcher matcher = ERROR_CODE_PATTERN.matcher(value == null ? "" : value);
+        if (matcher.find()) {
+            return matcher.group().toUpperCase(Locale.ROOT);
+        }
+        return "";
     }
 
     private boolean isRagCategory(String category) {
