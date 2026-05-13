@@ -86,6 +86,26 @@ class RagChatServiceTest {
                 captor.getValue().getQuery());
     }
 
+    @Test
+    void fallsBackToErrorCodeEvidenceWhenLlmAnswerGenerationFails() {
+        when(responseCacheService.findSimilar(anyString(), anyString())).thenReturn(Optional.empty());
+        when(vectorStore.similaritySearch(any(SearchRequest.class)))
+                .thenReturn(List.of(document("""
+                        [섹션: WMS 화면 사용 가이드 > WMS 오류 코드 기준 및 조치 가이드]
+                        - INB-409: 입고 검수 완료 불가. 검수 수량 불일치, 불량 증빙 누락, 이미 완료된 입고 지시서 상태를 확인한다.
+                        """, "wms-ui-guide", 0.49)));
+        when(openAiChatGateway.complete(anyString(), anyString()))
+                .thenThrow(new IllegalStateException("OpenAI chat completion failed: null"));
+
+        String answer = ragChatService.ask("INB-409 이게 뭐야?", "RAG", List.of());
+
+        assertEquals("INB-409는 입고 검수 완료 불가 상태를 의미합니다. 검수 수량 불일치, 불량 증빙 누락, 이미 완료된 입고 지시서 상태를 확인하세요.", answer);
+        ArgumentCaptor<SearchRequest> captor = forClass(SearchRequest.class);
+        verify(vectorStore).similaritySearch(captor.capture());
+        assertEquals("INB-409 이게 뭐야? WMS 오류 코드 기준 조치 가이드 실패 원인 확인 감사 로그",
+                captor.getValue().getQuery());
+    }
+
     private Document document(String text, String source, double score) {
         return Document.builder()
                 .text(text)

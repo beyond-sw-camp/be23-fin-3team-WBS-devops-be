@@ -42,6 +42,10 @@ public class ChatRoutingService {
                     "수량.*다르|재고.*다르|엑셀\\s*다운로드|qr|바코드|비활성화.*안\\s*돼)"
     );
 
+    private static final Pattern ERROR_CODE_HINT = Pattern.compile(
+            "(?i).*\\b(AUTH|DOC|INB|OUT|PICK|ASSIGN|INV|CODE|MASTER|MENU|FILE)-\\d{3}\\b.*"
+    );
+
     private static final Pattern SHORT_FOLLOW_UP = Pattern.compile(
             "^(하위는\\??|상위는\\??|어제는\\??|오늘은\\??|그 다음은\\??|그럼\\??|그리고\\??|다시\\??|더 보여줘\\??|" +
                     "첫 번째만\\??|첫번째만\\??|두 번째만\\??|두번째만\\??|진행 중인 것만\\??|대기 중인 것만\\??)$"
@@ -203,12 +207,17 @@ public class ChatRoutingService {
         }
 
         boolean workQueryHint = WORK_QUERY_HINT.matcher(question).find();
-        boolean ragHint = RAG_HINT.matcher(question).find();
+        boolean errorCodeHint = ERROR_CODE_HINT.matcher(question).matches();
+        boolean ragHint = RAG_HINT.matcher(question).find() || errorCodeHint;
         boolean followUpHint = context != null && context.rows() != null && !context.rows().isEmpty()
                 && SHORT_FOLLOW_UP.matcher(question).matches();
 
         if (isUserIdentityQuestion(question) || isObviousGeneral(question) || isDeterministicGeneral(question)) {
             return RoutingDecision.general("deterministic_boundary", null);
+        }
+
+        if (errorCodeHint) {
+            return RoutingDecision.rag("error_code_manual_question");
         }
 
         try {
