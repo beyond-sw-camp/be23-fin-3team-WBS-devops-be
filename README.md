@@ -179,25 +179,31 @@
 
 #### 3.1.1 입고 — 웹 단계
 
+**🎬 발주서 기반 입고지시서 생성**
+
+<div align="center">
+  <img src="이미지URL_여기에_넣기" width="720" alt="발주서 기반 입고지시서 생성 시연 영상" />
+</div>
+
 **🎬 입고지시서 수동 생성**
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/e2065dd0-d6df-476f-92ca-7ff003a98f70" width="720" alt="시연 영상" />
+  <img src="https://github.com/user-attachments/assets/e2065dd0-d6df-476f-92ca-7ff003a98f70" width="720" alt="입고지시서 수동 생성 시연 영상" />
 </div>
 
 **🎬 입고 확정 및 검수 (웹)**
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/fa4f7579-34b5-4bfa-a21a-ae9a9708039b" width="720" alt="시연 영상" />
+  <img src="https://github.com/user-attachments/assets/fa4f7579-34b5-4bfa-a21a-ae9a9708039b" width="720" alt="입고 확정 및 검수 웹 시연 영상" />
 </div>
 
 **🎬 적치 (웹)**
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/699d5f12-0872-450a-b487-884fab50004f" width="720" alt="시연 영상" />
+  <img src="https://github.com/user-attachments/assets/699d5f12-0872-450a-b487-884fab50004f" width="720" alt="적치 웹 시연 영상" />
 </div>
 
-ERP 발주서를 입고지시서로 만들고 승인하는 관리자 작업입니다.
+ERP 발주서를 입고지시서로 전환하거나 운영자가 직접 입고지시서를 생성한 뒤, 검수·적치까지 이어지는 입고 관리자 작업입니다.
 
 - **3가지 생성 경로**: 발주서 자동 / 수동 / 반품 기반 — 출처 유형 자동 분기
 - **추천 창고**: 협력사 전용 랙(1순위) → 카테고리 매칭 구역(2순위) → 활성 창고 점수로 후보 응답, 운영자가 직접 선택
@@ -208,25 +214,31 @@ ERP 발주서를 입고지시서로 만들고 승인하는 관리자 작업입�
 
 #### 3.1.2 출고 — 웹 단계
 
+**🎬 수주서 기반 출고지시서 생성**
+
+<div align="center">
+  <img src="이미지URL_여기에_넣기" width="720" alt="수주서 기반 출고지시서 생성 시연 영상" />
+</div>
+
 **🎬 출고지시서 수동 생성 및 승인**
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/2443fe93-780b-4696-a8ff-0878e1542516" width="720" alt="시연 영상" />
+  <img src="https://github.com/user-attachments/assets/2443fe93-780b-4696-a8ff-0878e1542516" width="720" alt="출고지시서 수동 생성 및 승인 시연 영상" />
 </div>
 
 **🎬 피킹 리스트 생성**
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/ea6a225e-4192-42d6-8fa9-297c941794af" width="720" alt="시연 영상" />
+  <img src="https://github.com/user-attachments/assets/ea6a225e-4192-42d6-8fa9-297c941794af" width="720" alt="피킹 리스트 생성 시연 영상" />
 </div>
 
 **🎬 피킹 완료 (웹)**
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/17a39eae-d9b3-4310-a436-888516063181" width="720" alt="시연 영상" />
+  <img src="https://github.com/user-attachments/assets/17a39eae-d9b3-4310-a436-888516063181" width="720" alt="피킹 완료 웹 시연 영상" />
 </div>
 
-ERP 수주서를 출고지시서로 만들고 ATP 검증 → 승인 → 출고 확정까지 처리합니다.
+ERP 수주서를 출고지시서로 전환하거나 운영자가 직접 출고지시서를 생성한 뒤, ATP 검증 → 승인 → 피킹 → 출고 확정까지 처리합니다.
 
 - **단일 / 분할 출고**: 한 창고로 충분하면 단일, 부족하면 창고별 분할 출고지시서 자동 분기
 - **ATP 사전 검증**: 가용재고 + 입고예정 + 검수중 합산. 부족하면 승인 차단 + **출고 불가 수주 화면**에 자동 등록·해제
@@ -237,6 +249,7 @@ ERP 수주서를 출고지시서로 만들고 ATP 검증 → 승인 → 출고 �
 → 피킹 단계는 [3.2.2 모바일 출고](#322-출고--피킹출고-확정)로 이어집니다.
 
 ---
+
 
 ### 3.2 모바일 앱 (작업자)
 
