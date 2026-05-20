@@ -182,7 +182,7 @@
 **🎬 발주서 기반 입고지시서 생성**
 
 <div align="center">
-  <img src="이미지URL_여기에_넣기" width="720" alt="발주서 기반 입고지시서 생성 시연 영상" />
+  <img src="https://github.com/user-attachments/assets/904635f6-d15e-4a56-b75a-9ed31efad642" width="720" alt="발주서 기반 입고지시서 생성 시연 영상" />
 </div>
 
 **🎬 입고지시서 수동 생성**
@@ -217,7 +217,7 @@ ERP 발주서를 입고지시서로 전환하거나 운영자가 직접 입고�
 **🎬 수주서 기반 출고지시서 생성**
 
 <div align="center">
-  <img src="이미지URL_여기에_넣기" width="720" alt="수주서 기반 출고지시서 생성 시연 영상" />
+  <img src="https://github.com/user-attachments/assets/bbaedb55-e7c7-44ba-aea6-c05534f0a1e9" width="720" alt="수주서 기반 출고지시서 생성 시연 영상" />
 </div>
 
 **🎬 출고지시서 수동 생성 및 승인**
