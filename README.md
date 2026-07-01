@@ -3,7 +3,7 @@
 ## 지능형 스마트 창고 관리 플랫폼 (WMS)
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/1930ac8b-d94b-4267-ab8b-b7ac28588ce3">
+  <img src="docs/images/banner-main.gif">
 </div>
 
 <br>
@@ -38,7 +38,7 @@
 
 | 김세연 | 황건하 | 이은경 | 박준형 |
 | :---: | :---: | :---: | :---: |
-| <img src="https://github.com/user-attachments/assets/2d8f51f4-69a8-4146-9fa5-03c11ebca166" width="120" height="120"><br>[@tpdus55](https://github.com/tpdus55) | <img src="https://github.com/user-attachments/assets/3a54b9d7-ca1b-4cd1-8a2c-8a39e5083c86" width="120" height="120"><br>[@LittleNiddle](https://github.com/LittleNiddle) | <img width="150" height="150" alt="Image" src="https://github.com/user-attachments/assets/08bf9777-8144-4012-b871-7cd268fc219d" /><br>[@DLDMSRUD-BIT](https://github.com/DLDMSRUD-BIT) | <img src="https://github.com/user-attachments/assets/a4d97c2f-9be3-4a7a-87ea-bd23c56a08aa" width="150" height="150"><br>[@tony00](https://github.com/abilitytony) |
+| <img src="docs/images/team-kim-seyeon.jpg" width="120" height="120"><br>[@tpdus55](https://github.com/tpdus55) | <img src="docs/images/team-hwang-geonha.jpg" width="120" height="120"><br>[@LittleNiddle](https://github.com/LittleNiddle) | <img width="150" height="150" alt="Image" src="docs/images/team-lee-eunkyung.jpg" /><br>[@DLDMSRUD-BIT](https://github.com/DLDMSRUD-BIT) | <img src="docs/images/team-park-junhyung.jpg" width="150" height="150"><br>[@tony00](https://github.com/abilitytony) |
 
 ---
 
@@ -47,9 +47,9 @@
 ### 2.1 프로젝트 주제
 
 <div align="center">
-  <img width="1244" height="698" alt="주제 선정배경" src="https://github.com/user-attachments/assets/7522ec72-ee9d-4646-8335-d6218f0e037c" />
+  <img width="1244" height="698" alt="주제 선정배경" src="docs/images/intro-background.png" />
   <br><br>
-  <img width="1247" height="700" alt="기존 WMS 한계" src="https://github.com/user-attachments/assets/2506e3ef-3ef9-43d7-8c95-132700d88661" />
+  <img width="1247" height="700" alt="기존 WMS 한계" src="docs/images/intro-wms-limits.png" />
 </div>
 
 <details>
@@ -87,7 +87,7 @@
 ### 2.2 기획 의도 및 차별성
 
 <div align="center">
-  <img width="1242" height="696" alt="기획의도" src="https://github.com/user-attachments/assets/0a397700-ba70-4299-a396-9bd1554509e0" />
+  <img width="1242" height="696" alt="기획의도" src="docs/images/intro-planning.png" />
 </div>
 
 <details>
@@ -152,7 +152,7 @@
 <details open>
 <summary><b>📥 입고 프로세스</b></summary>
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/d548a369-23b0-4af5-a0df-506ed8b141de" width="90%" />
+  <img src="docs/images/process-inbound.gif" width="90%" />
   <p><i>입고 표준 절차</i></p>
 </div>
 </details>
@@ -160,7 +160,7 @@
 <details open>
 <summary><b>📦 출고 프로세스</b></summary>
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/787a9d5d-b421-4158-b613-afac180b70b6" width="90%" />
+  <img src="docs/images/process-outbound.gif" width="90%" />
   <p><i>피킹, 출고 절차</i></p>
 </div>
 </details>
@@ -182,25 +182,25 @@
 **🎬 발주서 기반 입고지시서 생성**
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/904635f6-d15e-4a56-b75a-9ed31efad642" width="720" alt="발주서 기반 입고지시서 생성 시연 영상" />
+  <img src="docs/images/web-inbound-po-create.gif" width="720" alt="발주서 기반 입고지시서 생성 시연 영상" />
 </div>
 
 **🎬 입고지시서 수동 생성**
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/e2065dd0-d6df-476f-92ca-7ff003a98f70" width="720" alt="입고지시서 수동 생성 시연 영상" />
+  <img src="docs/images/web-inbound-manual-create.gif" width="720" alt="입고지시서 수동 생성 시연 영상" />
 </div>
 
 **🎬 입고 확정 및 검수 (웹)**
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/fa4f7579-34b5-4bfa-a21a-ae9a9708039b" width="720" alt="입고 확정 및 검수 웹 시연 영상" />
+  <img src="docs/images/web-inbound-receive.gif" width="720" alt="입고 확정 및 검수 웹 시연 영상" />
 </div>
 
 **🎬 적치 (웹)**
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/699d5f12-0872-450a-b487-884fab50004f" width="720" alt="적치 웹 시연 영상" />
+  <img src="docs/images/web-inbound-stow.gif" width="720" alt="적치 웹 시연 영상" />
 </div>
 
 ERP 발주서를 입고지시서로 전환하거나 운영자가 직접 입고지시서를 생성한 뒤, 검수·적치까지 이어지는 입고 관리자 작업입니다.
@@ -217,25 +217,25 @@ ERP 발주서를 입고지시서로 전환하거나 운영자가 직접 입고�
 **🎬 수주서 기반 출고지시서 생성**
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/bbaedb55-e7c7-44ba-aea6-c05534f0a1e9" width="720" alt="수주서 기반 출고지시서 생성 시연 영상" />
+  <img src="docs/images/web-outbound-so-create.gif" width="720" alt="수주서 기반 출고지시서 생성 시연 영상" />
 </div>
 
 **🎬 출고지시서 수동 생성 및 승인**
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/2443fe93-780b-4696-a8ff-0878e1542516" width="720" alt="출고지시서 수동 생성 및 승인 시연 영상" />
+  <img src="docs/images/web-outbound-manual-create.gif" width="720" alt="출고지시서 수동 생성 및 승인 시연 영상" />
 </div>
 
 **🎬 피킹 리스트 생성**
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/ea6a225e-4192-42d6-8fa9-297c941794af" width="720" alt="피킹 리스트 생성 시연 영상" />
+  <img src="docs/images/web-outbound-picklist.gif" width="720" alt="피킹 리스트 생성 시연 영상" />
 </div>
 
 **🎬 피킹 완료 (웹)**
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/17a39eae-d9b3-4310-a436-888516063181" width="720" alt="피킹 완료 웹 시연 영상" />
+  <img src="docs/images/web-outbound-picking.gif" width="720" alt="피킹 완료 웹 시연 영상" />
 </div>
 
 ERP 수주서를 출고지시서로 전환하거나 운영자가 직접 출고지시서를 생성한 뒤, ATP 검증 → 승인 → 피킹 → 출고 확정까지 처리합니다.
@@ -260,7 +260,7 @@ ERP 수주서를 출고지시서로 전환하거나 운영자가 직접 출고�
 **🎬 입고 (앱)**
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/5d40ac80-9b8e-41ed-b054-a35b6a8be0db" width="360" alt="시연 영상" />
+  <img src="docs/images/app-inbound.gif" width="360" alt="시연 영상" />
 </div>
 
 웹에서 승인된 입고지시서를 현장에서 QR 스캔으로 처리합니다.
@@ -275,7 +275,7 @@ ERP 수주서를 출고지시서로 전환하거나 운영자가 직접 출고�
 **🎬 출고 (앱)**
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/037cd47c-2f55-4887-b745-f49031b25d5c" width="360" alt="시연 영상" />
+  <img src="docs/images/app-outbound.gif" width="360" alt="시연 영상" />
 </div>
 
 웹에서 승인된 출고지시서·피킹리스트를 현장에서 QR 스캔으로 처리합니다.
@@ -309,7 +309,7 @@ ERP 수주서를 출고지시서로 전환하거나 운영자가 직접 출고�
 **🎬 대시보드**
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/ccbcd8ad-f5c3-4109-8e22-31f40245b917" width="720" alt="시연 영상" />
+  <img src="docs/images/dashboard.gif" width="720" alt="시연 영상" />
 </div>
 
 운영자가 입고·출고·이동·반품 작업 현황과 재고 부족 이슈를 한 화면에서 확인할 수 있도록 구성한 대시보드입니다.
@@ -327,7 +327,7 @@ ERP 수주서를 출고지시서로 전환하거나 운영자가 직접 출고�
 **🎬 AI 챗봇 — 업무 범위 밖 질문 차단**
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/26a9cba5-24b1-438a-a040-3e02b0544ff9" width="720" alt="시연 영상" />
+  <img src="docs/images/chatbot-blocked.gif" width="720" alt="시연 영상" />
 </div>
 
 WMS AI 챗봇은 사용자의 자연어 질문을 분석해 업무 데이터 조회, 운영 매뉴얼 안내, 민감정보 차단 흐름으로 분기하는 업무 보조 어시스턴트입니다.
@@ -383,7 +383,7 @@ WMS AI 챗봇은 사용자의 자연어 질문을 분석해 업무 데이터 조
 
 <br>
 
-<img width="5840" height="3782" alt="ERD" src="https://github.com/user-attachments/assets/631f0964-480b-4b9f-9009-f950f7646124" />
+<img width="5840" height="3782" alt="ERD" src="docs/images/erd.png" />
 
 - [ERD (ERDCloud)](https://www.erdcloud.com/d/9okuYbfrEta7QAzrr)
 
@@ -568,7 +568,7 @@ WMS AI 챗봇은 사용자의 자연어 질문을 분석해 업무 데이터 조
 **🎬 안전재고 설정**
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/5cdaf18d-fe0c-4d47-bfc9-71c91a55f295" width="720" alt="시연 영상" />
+  <img src="docs/images/master-safety-stock.gif" width="720" alt="시연 영상" />
 </div>
 
 - 기준 재고 설정: 상품 × 창고 조합별 안전재고 등록
@@ -642,7 +642,7 @@ WMS AI 챗봇은 사용자의 자연어 질문을 분석해 업무 데이터 조
 **🎬 반품 입고**
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/7f44dfe0-fb39-4646-9967-3cddb93b90ab" width="720" alt="시연 영상" />
+  <img src="docs/images/return-inbound.gif" width="720" alt="시연 영상" />
 </div>
 
 - **생성 트리거**: 출고지시서 기반 (`InboundController.createFromReturn`)
@@ -658,7 +658,7 @@ WMS AI 챗봇은 사용자의 자연어 질문을 분석해 업무 데이터 조
 **🎬 반품 출고**
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/e5ba791c-3f3f-4cba-a793-2710d5bf5201" width="720" alt="시연 영상" />
+  <img src="docs/images/return-outbound.gif" width="720" alt="시연 영상" />
 </div>
 
 - **생성 트리거**: 입고지시서 기반 (`OutboundController.createReturnOutbound`)
@@ -674,7 +674,7 @@ WMS AI 챗봇은 사용자의 자연어 질문을 분석해 업무 데이터 조
 **🎬 이동 지시서**
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/ba60bb67-0b19-45ac-9ae0-d4bc5bfac90f" width="720" alt="시연 영상" />
+  <img src="docs/images/transfer-order.gif" width="720" alt="시연 영상" />
 </div>
 
 - 라이프사이클: 초안 → 승인 → 작업 진행 → 완료 / 부분 완료 / 취소, 자동 번호 부여 + 승인 시 작업자 자동 배정
@@ -689,7 +689,7 @@ WMS AI 챗봇은 사용자의 자연어 질문을 분석해 업무 데이터 조
 **🎬 기타 입고**
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/ad7128e3-5e28-460b-8cf4-c231931fabc7" width="720" alt="시연 영상" />
+  <img src="docs/images/other-inbound.gif" width="720" alt="시연 영상" />
 </div>
 
 - 4가지 입고 유형: 샘플 / 재고 조정 / 재발주 / 폐기
@@ -704,7 +704,7 @@ WMS AI 챗봇은 사용자의 자연어 질문을 분석해 업무 데이터 조
 **🎬 기타 출고**
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/5f4714df-0faa-418d-8233-843ddd35d195" width="720" alt="시연 영상" />
+  <img src="docs/images/other-outbound.gif" width="720" alt="시연 영상" />
 </div>
 
 - 4가지 출고 유형: 샘플 / 재고 조정 / 재발주 입고 요청 / 폐기
@@ -735,7 +735,7 @@ WMS AI 챗봇은 사용자의 자연어 질문을 분석해 업무 데이터 조
 **🎬 공식 문서함**
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/465dd139-9d76-4b7b-86ca-f3e51e7462f7" width="720" alt="시연 영상" />
+  <img src="docs/images/doc-management.gif" width="720" alt="시연 영상" />
 </div>
 
 - **다조건 검색**: docType·sourceId·status·발행일자 범위 필터링 (`InstructionDocumentController.search`)
@@ -773,7 +773,7 @@ WMS AI 챗봇은 사용자의 자연어 질문을 분석해 업무 데이터 조
 **🎬 재고 현황**
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/7c48c663-cf55-400d-98d9-a87cad270180" width="720" alt="시연 영상" />
+  <img src="docs/images/stock-status.gif" width="720" alt="시연 영상" />
 </div>
 
 - 현재 / 기준일 조회: 실시간 재고 또는 특정 시점 재고 확인
@@ -787,7 +787,7 @@ WMS AI 챗봇은 사용자의 자연어 질문을 분석해 업무 데이터 조
 **🎬 재고 실사 (웹)**
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/68e9061a-d34c-445a-a855-3b7828004f8b" width="720" alt="시연 영상" />
+  <img src="docs/images/stock-inventory-web.gif" width="720" alt="시연 영상" />
 </div>
 
 - 조사 지시 생성: 창고 선택 후 실사 대상 상품 지정
@@ -806,13 +806,13 @@ WMS AI 챗봇은 사용자의 자연어 질문을 분석해 업무 데이터 조
 **🎬 재고 위치 조회**
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/1f337d48-f994-4ee3-8ec1-4e6bdd6a5d1c" width="720" alt="시연 영상" />
+  <img src="docs/images/stock-location.gif" width="720" alt="시연 영상" />
 </div>
 
 **🎬 재고 위치 조회 (상품 검색)**
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/559000b9-4bba-4e75-b610-e82d47d38920" width="720" alt="시연 영상" />
+  <img src="docs/images/stock-location-search.gif" width="720" alt="시연 영상" />
 </div>
 
 - 위치 중심 관리: 창고-구역-랙-로케이션 기준 재고 확인
@@ -844,7 +844,7 @@ WMS AI 챗봇은 사용자의 자연어 질문을 분석해 업무 데이터 조
 **🎬 실시간 알림 (WebSocket)**
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/3cfc7045-9f35-4df8-82bc-e0524c78717c" width="720" alt="시연 영상" />
+  <img src="docs/images/alert-realtime.gif" width="720" alt="시연 영상" />
 </div>
 
 - 통합 알림함: 운영 중 발생한 주요 이벤트를 시간순 조회
@@ -863,7 +863,7 @@ WMS AI 챗봇은 사용자의 자연어 질문을 분석해 업무 데이터 조
 **🎬 감사 로그**
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/61a4f673-3988-462b-8f13-9c5ec39d7fc6" width="720" alt="시연 영상" />
+  <img src="docs/images/audit-log.gif" width="720" alt="시연 영상" />
 </div>
 
 - **Elasticsearch 전문 검색**: 4개 마이크로서비스의 감사 로그를 단일 인덱스에서 통합 검색 (`AuditLogSearchController.search`)
@@ -977,7 +977,7 @@ WMS AI 챗봇은 사용자의 자연어 질문을 분석해 업무 데이터 조
 **🎬 로그인 (앱)**
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/68c37145-3c44-460f-a313-2ba146ef93c3" width="360" alt="시연 영상" />
+  <img src="docs/images/app-login.gif" width="360" alt="시연 영상" />
 </div>
 
 - 토큰 기반 로그인: 토큰 발급 후 모든 요청에 자동 첨부
@@ -991,7 +991,7 @@ WMS AI 챗봇은 사용자의 자연어 질문을 분석해 업무 데이터 조
 **🎬 이동 (앱)**
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/c4faa3f6-5f08-4998-94be-d6ddd176eff8" width="360" alt="시연 영상" />
+  <img src="docs/images/app-transfer.gif" width="360" alt="시연 영상" />
 </div>
 
 - 본인 작업 목록: 픽업 작업 + 적치 작업 분리, 위치 정렬 반환
@@ -1005,7 +1005,7 @@ WMS AI 챗봇은 사용자의 자연어 질문을 분석해 업무 데이터 조
 **🎬 기타입출고 (앱)**
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/0a96adb2-466c-436d-9513-9056cc47a8ed" width="360" alt="시연 영상" />
+  <img src="docs/images/app-other-inout.gif" width="360" alt="시연 영상" />
 </div>
 
 - 본인 배정 목록: 자동 배정된 작업자에게만 노출 (입고/출고 통합)
@@ -1019,7 +1019,7 @@ WMS AI 챗봇은 사용자의 자연어 질문을 분석해 업무 데이터 조
 **🎬 재고 실사 (앱)**
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/1c2ec1a1-8ebe-4e50-8196-33bb04de6a3b" width="360" alt="시연 영상" />
+  <img src="docs/images/app-inventory.gif" width="360" alt="시연 영상" />
 </div>
 
 - 목록 정책: 진행 중 실사는 누구나 + 본인이 카운트한 적 있는 실사 (이력 회상 + 새 실사 진입 동시 지원)
@@ -1034,7 +1034,7 @@ WMS AI 챗봇은 사용자의 자연어 질문을 분석해 업무 데이터 조
 **🎬 재고 조회 (앱)**
 
 <div align="center">
-  <img src="https://github.com/user-attachments/assets/c756bbe5-be29-423d-9baa-5fad96f26e11" width="360" alt="시연 영상" />
+  <img src="docs/images/app-stock.gif" width="360" alt="시연 영상" />
 </div>
 
 - 랙 QR 스캔 재고 조회: 랙 안 모든 위치 재고 4종 수량 (가용 / 예약 / 불량 / 검수중) 동시 표시
